@@ -23,6 +23,7 @@ function normalizeBindType(type = "") {
   if (type === "捆2" || type.includes("热")) return "捆2";
   if (type === "捆1") return "捆1";
   if (type === "备捆") return "备捆";
+  if (type === "捆物") return "捆物";
   return "不捆";
 }
 
@@ -109,7 +110,7 @@ function loadState() {
   try {
     const state = JSON.parse(saved);
     const records = Array.isArray(state.records)
-      ? state.records.map((record) => (record.status === legacyRemovedStatus ? { ...record, status: "无效" } : record))
+      ? state.records.map((record) => (record.status === legacyRemovedStatus ? { ...record, status: "未通过" } : record))
       : [];
     return {
       members: Array.isArray(state.members)
@@ -186,6 +187,8 @@ function memberById(state, id) {
 }
 
 function recordValue(record) {
+  if (record.status === "未通过") return 0;
+  if (record.claimType === "无效推车") return 0.5;
   if (record.status !== "已确认") return 0;
   if (record.claimType === "有效推车") return 1;
   if (record.claimType === "小推车多") return 2;
@@ -193,25 +196,23 @@ function recordValue(record) {
 }
 
 function memberReduction(state, memberId) {
-  return Math.min(
-    2,
-    state.records
-      .filter((record) => record.pusherId === memberId)
-      .reduce((total, record) => total + recordValue(record), 0),
-  );
+  return state.records
+    .filter((record) => record.pusherId === memberId)
+    .reduce((total, record) => total + recordValue(record), 0);
 }
 
 function memberBundle(state, member) {
   if (!member) return 0;
-  return Math.max(0, bindBundleValue(member.type) - memberReduction(state, member.id));
+  return Math.max(0, memberBaseBundle(state, member) - memberReduction(state, member.id));
 }
 
 function memberStateLabel(state, member) {
   const bundle = memberBundle(state, member);
-  const pending = state.records.some((record) => record.pusherId === member.id && record.status === "待确认");
-  if (pending) return "有待确认";
-  if (bundle === bindBundleValue(member.type) && bundle > 0) return "躺吃/无有效";
-  return "已计算";
+  const records = state.records.filter((record) => record.pusherId === member.id && record.status !== "未通过");
+  if (records.some((record) => record.claimType !== "无效推车" && record.status === "已确认")) return "有效";
+  if (records.some((record) => record.claimType === "无效推车")) return "无效";
+  if (bundle > 0) return `${trimNumber(memberBindUnitCount(state, member))}+躺吃`;
+  return "-";
 }
 
 function escapeHtml(value) {
@@ -225,7 +226,7 @@ function tagClass(type) {
   if (type === "热门" || type === "捆2") return "hot";
   if (type === "捆1") return "bind-one";
   if (type === "备捆") return "backup";
-  if (type === "冷门" || type === "不捆") return "cold";
+  if (type === "冷门" || type === "捆物" || type === "不捆") return "cold";
   return "normal";
 }
 
@@ -242,15 +243,77 @@ function bindBundleValue(type) {
   return 0;
 }
 
+function itemQuantityMap(itemText) {
+  const map = new Map();
+  String(itemText || "")
+    .split(/[;；]/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .forEach((part) => {
+      const match = part.match(/^(.*)x([0-9.]+)$/i);
+      const name = match ? match[1] : part;
+      const quantity = match ? Number(match[2]) : 1;
+      map.set(name, (Number(map.get(name)) || 0) + quantity);
+    });
+  return map;
+}
+
+function itemRuleForName(state, itemName) {
+  const catalogItem = (state.itemCatalog || []).find((item) => item.name === itemName);
+  return normalizeBindType(state.itemRules?.[itemName] || catalogItem?.type || "不捆");
+}
+
+function itemCategoryForName(state, itemName) {
+  return (state.itemCatalog || []).find((item) => item.name === itemName)?.category || "";
+}
+
+function memberBindEntries(state, member) {
+  if (!member) return [];
+  const entries = [];
+  itemQuantityMap(member.item).forEach((quantity, name) => {
+    const type = itemRuleForName(state, name);
+    if (bindRank(type) <= 0) return;
+    entries.push({
+      name,
+      quantity: Number(quantity) || 0,
+      type,
+      category: itemCategoryForName(state, name),
+      bundle: (Number(quantity) || 0) * bindBundleValue(type),
+    });
+  });
+  return entries;
+}
+
+function memberBindUnitCount(state, member) {
+  return memberBindEntries(state, member).reduce((total, entry) => total + entry.quantity, 0);
+}
+
+function memberBaseBundle(state, member) {
+  return memberBindEntries(state, member).reduce((total, entry) => total + entry.bundle, 0);
+}
+
+function memberRemainingItemMap(state, member) {
+  const map = new Map();
+  let credit = memberReduction(state, member.id);
+  memberBindEntries(state, member).forEach((entry) => {
+    const used = Math.min(entry.bundle, credit);
+    credit -= used;
+    const remaining = Math.max(0, entry.bundle - used);
+    if (remaining > 0) map.set(entry.name, trimNumber(remaining));
+  });
+  return map;
+}
+
 function statusClass(status) {
   if (status === "已确认") return "confirmed";
-  if (status === "无效") return "invalid";
+  if (status === "无效" || status === "未通过" || status === "无效推车") return "invalid";
   return "pending";
 }
 
 function statusText(status) {
   if (status === "已确认") return "通过";
-  if (status === "无效") return "未通过";
+  if (status === "无效推车") return "无效推车";
+  if (status === "无效" || status === "未通过") return "未通过";
   return status;
 }
 
@@ -271,4 +334,8 @@ function showToast(message) {
   toast.classList.add("show");
   window.clearTimeout(showToast.timer);
   showToast.timer = window.setTimeout(() => toast.classList.remove("show"), 1800);
+}
+
+function trimNumber(value) {
+  return Number.isInteger(value) ? String(value) : String(value).replace(/0+$/, "").replace(/\.$/, "");
 }

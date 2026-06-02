@@ -62,11 +62,13 @@
             <div class="allocation-toolbar">
               <div>
                 <h2>最终捆物表</h2>
-                <p>只算捆物数量，不改变原排谷优先级。</p>
               </div>
               <div class="toolbar-actions">
-                <button class="ghost-button" id="copyBtn" type="button">复制结果</button>
-                <button class="ghost-button" id="downloadBtn" type="button">下载 CSV</button>
+                <fieldset class="allocation-filter" aria-label="筛选捆序">
+                  <label><input data-allocation-filter="捆2" type="checkbox" checked /> 捆2</label>
+                  <label><input data-allocation-filter="捆1" type="checkbox" checked /> 捆1</label>
+                  <label><input data-allocation-filter="备捆" type="checkbox" checked /> 备捆</label>
+                </fieldset>
               </div>
             </div>
             <div class="table-wrap">
@@ -76,8 +78,8 @@
                     <th>成员</th>
                     <th>吃款</th>
                     <th>捆序</th>
-                    <th>有效减免</th>
-                    <th>最终捆物</th>
+                    <th>有效推车数量</th>
+                    <th>捆物剩余</th>
                     <th>状态</th>
                   </tr>
                 </thead>

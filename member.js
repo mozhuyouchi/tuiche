@@ -49,8 +49,8 @@ function renderSummary() {
     <div class="summary-card">
       <span class="tag ${tagClass(me.type)}">${me.type}</span>
       <strong>${escapeHtml(me.name)}｜${escapeHtml(me.item)}</strong>
-      <p>有效减免：-${reduction}</p>
-      <p class="${bundle === 0 ? "bundle-zero" : bundle === 2 ? "bundle-two" : ""}">最终：${bundle === 0 ? "不捆" : `捆 ${bundle}`}</p>
+      <p>有效推车数量：${trimNumber(reduction)}</p>
+      <p class="${bundle === 0 ? "bundle-zero" : bundle >= 2 ? "bundle-two" : ""}">捆物剩余：${bundle === 0 ? "不捆" : trimNumber(bundle)}</p>
     </div>
   `;
 }
@@ -136,7 +136,7 @@ function submitRecord() {
     proof: els.proofInput.value.trim(),
     proofImageName: selectedProofImage?.name || "",
     proofImageData: selectedProofImage?.dataUrl || "",
-    status: isInvalid ? "无效" : "待确认",
+    status: isInvalid ? "无效推车" : "待确认",
     targetConfirmed: false,
   });
   els.proofInput.value = "";
@@ -155,7 +155,7 @@ document.addEventListener("click", (event) => {
     showToast("已确认，计入有效状态");
   }
   if (button.dataset.action === "reject-target") {
-    state = updateRecord(button.dataset.id, { targetConfirmed: false, status: "无效" });
+    state = updateRecord(button.dataset.id, { targetConfirmed: false, status: "未通过" });
     showToast("已标记为未通过");
   }
   render();

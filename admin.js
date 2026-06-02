@@ -14,11 +14,10 @@ const els = {
   recordList: document.querySelector("#recordList"),
   recordCount: document.querySelector("#recordCount"),
   allocationBody: document.querySelector("#allocationBody"),
+  allocationFilters: document.querySelectorAll("[data-allocation-filter]"),
   hotCount: document.querySelector("#hotCount"),
   confirmedCount: document.querySelector("#confirmedCount"),
   pendingCount: document.querySelector("#pendingCount"),
-  copyBtn: document.querySelector("#copyBtn"),
-  downloadBtn: document.querySelector("#downloadBtn"),
 };
 
 function renderMembers() {
@@ -28,19 +27,26 @@ function renderMembers() {
     return;
   }
 
-  const itemColumns = rosterItemColumns();
+  const overview = rosterOverview();
+  const overviewHtml = `
+    <div class="overview-block">
+      <strong>可成配数：${trimNumber(overview.setCount)}</strong>
+      <span>角色剩余：${escapeHtml(overview.remainingText)}</span>
+    </div>
+  `;
   const rows = state.members
-    .map((member) => {
-      const itemMap = itemQuantityMap(member.item);
+    .map((member, index) => {
       const bundle = memberBundle(state, member);
       const bindItems = memberBindItems(member);
       const bindReason = bindItems.length ? bindItems.join("、") : "-";
-      const baseBundle = bindBundleValue(member.type);
-      const bundleText = baseBundle > 0 ? `<span class="${bundle === 0 ? "bundle-zero" : bundle === 2 ? "bundle-two" : ""}">${bundle === 0 ? "不捆" : `捆 ${bundle}`}</span>` : "-";
+      const baseBundle = memberBaseBundle(state, member);
+      const bundleText = baseBundle > 0 ? `<span class="${bundle === 0 ? "bundle-zero" : bundle >= 2 ? "bundle-two" : ""}">${bundle === 0 ? "不捆" : trimNumber(bundle)}</span>` : "-";
       const pushText = memberPushStatus(member);
-      const itemCells = itemColumns
-        .map((item) => `<td class="quantity-cell">${escapeHtml(itemMap.get(item) || "")}</td>`)
-        .join("");
+      const creditText = trimNumber(memberReduction(state, member.id));
+      const remainingRoleCell =
+        index === 0
+          ? `<td class="remaining-role-cell" rowspan="${state.members.length}">${overviewHtml}</td>`
+          : "";
       return `
         <tr>
           <td class="name-cell">
@@ -49,7 +55,8 @@ function renderMembers() {
           <td class="hot-reason-cell">${escapeHtml(bindReason)}</td>
           <td class="bundle-cell">${bundleText}</td>
           <td class="push-status-cell">${escapeHtml(pushText)}</td>
-          ${itemCells}
+          <td class="quantity-cell">${creditText}</td>
+          ${remainingRoleCell}
         </tr>
       `;
     })
@@ -61,10 +68,11 @@ function renderMembers() {
         <thead>
           <tr>
             <th>昵称</th>
-            <th>被捆款式</th>
-            <th>目前要捆数量</th>
-            <th>目前推车状态</th>
-            ${itemColumns.map((item) => `<th>${escapeHtml(item)}</th>`).join("")}
+            <th>list</th>
+            <th>被捆数量</th>
+            <th>推车状态</th>
+            <th>有效推车数量</th>
+            <th>总览</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
@@ -73,37 +81,42 @@ function renderMembers() {
   `;
 }
 
-function rosterItemColumns() {
-  const catalogItems = (state.itemCatalog || [])
-    .map((item) => item.name)
-    .filter(Boolean);
-  if (catalogItems.length) return catalogItems;
-
-  const items = [];
-  state.members.forEach((member) => {
-    itemQuantityMap(member.item).forEach((_, item) => {
-      if (!items.includes(item)) items.push(item);
-    });
+function memberBindItems(member) {
+  const entries = [];
+  itemQuantityMap(member.item).forEach((quantity, itemName) => {
+    const type = itemRuleForName(state, itemName);
+    if (bindRank(type) <= 0 && type !== "捆物") return;
+    const category = itemCategoryForName(state, itemName);
+    entries.push(`${itemName}x${trimNumber(quantity)}｜${type}${category ? `｜${category}` : ""}`);
   });
-  return items.length ? items : ["款式"];
+  return entries;
 }
 
-function memberBindItems(member) {
-  const bindNames = new Set(
-    (state.itemCatalog || [])
-      .filter((item) => bindRank(item.type) > 0 || bindRank(state.itemRules?.[item.name]) > 0)
-      .map((item) => item.name),
-  );
-  return Array.from(itemQuantityMap(member.item).keys()).filter((item) => bindNames.has(item));
+function rosterOverview() {
+  const allTotals = new Map();
+  const bundleGoodsTotals = new Map();
+  state.members.forEach((member) => {
+    itemQuantityMap(member.item).forEach((quantity, itemName) => {
+      allTotals.set(itemName, (Number(allTotals.get(itemName)) || 0) + Number(quantity));
+      if (itemRuleForName(state, itemName) === "捆物") {
+        bundleGoodsTotals.set(itemName, (Number(bundleGoodsTotals.get(itemName)) || 0) + Number(quantity));
+      }
+    });
+  });
+  const boxItemNames = (state.itemCatalog || []).map((item) => item.name).filter(Boolean);
+  const setQuantities = (boxItemNames.length ? boxItemNames : Array.from(allTotals.keys())).map((itemName) => Number(allTotals.get(itemName)) || 0);
+  return {
+    setCount: setQuantities.length ? Math.min(...setQuantities) : 0,
+    remainingText: bundleGoodsTotals.size
+      ? Array.from(bundleGoodsTotals.entries())
+          .map(([itemName, quantity]) => `${itemName}x${trimNumber(quantity)}`)
+          .join("、")
+      : "-",
+  };
 }
 
 function memberPushStatus(member) {
-  if (bindBundleValue(member.type) === 0) return "-";
-  const records = state.records.filter((record) => record.pusherId === member.id);
-  if (!records.length) return "躺吃";
-  if (records.some((record) => record.status === "待确认")) return "待确认";
-  if (records.some((record) => record.status === "已确认")) return "已交推车";
-  return "未通过";
+  return memberStateLabel(state, member);
 }
 
 function itemQuantityMap(itemText) {
@@ -115,9 +128,9 @@ function itemQuantityMap(itemText) {
     .forEach((part) => {
       const match = part.match(/^(.*)x([0-9.]+)$/i);
       if (match) {
-        map.set(match[1], trimNumber(Number(match[2])));
+        map.set(match[1], (Number(map.get(match[1])) || 0) + Number(match[2]));
       } else {
-        map.set(part, "1");
+        map.set(part, (Number(map.get(part)) || 0) + 1);
       }
     });
   return map;
@@ -155,7 +168,7 @@ function recordCard(record) {
 function recordCreditText(record) {
   if (record.claimType === "小推车多") return "计 2 个有效推车";
   if (record.claimType === "有效推车") return "计 1 个有效推车";
-  return "计 0 个有效推车";
+  return "计 0.5 个有效推车";
 }
 
 function renderRecords() {
@@ -164,18 +177,23 @@ function renderRecords() {
 }
 
 function renderAllocation() {
-  els.allocationBody.innerHTML = state.members
+  const members = filteredAllocationMembers();
+  if (!members.length) {
+    els.allocationBody.innerHTML = `<tr><td colspan="6" class="empty-table-cell">当前筛选下没有成员</td></tr>`;
+    return;
+  }
+  els.allocationBody.innerHTML = members
     .map((member) => {
       const reduction = memberReduction(state, member.id);
       const bundle = memberBundle(state, member);
-      const bundleClass = bundle === 0 ? "bundle-zero" : bundle === 2 ? "bundle-two" : "";
+      const bundleClass = bundle === 0 ? "bundle-zero" : bundle >= 2 ? "bundle-two" : "";
       return `
         <tr>
           <td>${escapeHtml(member.name)}</td>
           <td>${escapeHtml(member.item)}</td>
           <td><span class="tag ${tagClass(member.type)}">${member.type}</span></td>
-          <td>${bindBundleValue(member.type) > 0 ? `-${reduction}` : "-"}</td>
-          <td class="${bundleClass}">${bundle === 0 ? "不捆" : `捆 ${bundle}`}</td>
+          <td>${memberBaseBundle(state, member) > 0 ? trimNumber(reduction) : "-"}</td>
+          <td class="${bundleClass}">${bundle === 0 ? "不捆" : trimNumber(bundle)}</td>
           <td>${memberStateLabel(state, member)}</td>
         </tr>
       `;
@@ -183,11 +201,21 @@ function renderAllocation() {
     .join("");
 }
 
+function allocationFilterTypes() {
+  return Array.from(els.allocationFilters)
+    .filter((input) => input.checked)
+    .map((input) => input.dataset.allocationFilter);
+}
+
+function filteredAllocationMembers() {
+  const allowedTypes = allocationFilterTypes();
+  return state.members.filter((member) => allowedTypes.includes(normalizeBindType(member.type)));
+}
+
 function renderSummary() {
-  const bundledMembers = state.members.filter((member) => bindBundleValue(member.type) > 0);
+  const bundledMembers = state.members.filter((member) => memberBaseBundle(state, member) > 0);
   const submittedBundledMembers = bundledMembers.filter((member) => state.records.some((record) => record.pusherId === member.id));
   els.hotCount.textContent = state.members
-    .filter((member) => bindBundleValue(member.type) > 0)
     .reduce((total, member) => total + memberBundle(state, member), 0);
   els.confirmedCount.textContent = submittedBundledMembers.length;
   els.pendingCount.textContent = bundledMembers.length - submittedBundledMembers.length;
@@ -232,6 +260,7 @@ function renderItemRules(items) {
                 <option value="捆1" ${savedType === "捆1" ? "selected" : ""}>捆1</option>
                 <option value="备捆" ${savedType === "备捆" ? "selected" : ""}>备捆</option>
                 <option value="不捆" ${savedType === "不捆" ? "selected" : ""}>不捆</option>
+                <option value="捆物" ${savedType === "捆物" ? "selected" : ""}>捆物</option>
               </select>
             </label>
           `;
@@ -243,46 +272,6 @@ function renderItemRules(items) {
 function formatPrice(value) {
   const price = Number(value || 0);
   return price ? `单价 ${trimNumber(price)}` : "无单价";
-}
-
-function allocationRows() {
-  return [
-    ["成员", "吃款", "捆序", "有效减免", "最终捆物", "状态", "总金额"],
-    ...state.members.map((member) => {
-      const reduction = memberReduction(state, member.id);
-      const bundle = memberBundle(state, member);
-      return [
-        member.name,
-        member.item,
-        member.type,
-        bindBundleValue(member.type) > 0 ? `-${reduction}` : "-",
-        bundle === 0 ? "不捆" : `捆 ${bundle}`,
-        memberStateLabel(state, member),
-        member.amount || "",
-      ];
-    }),
-  ];
-}
-
-function copyResults() {
-  navigator.clipboard
-    .writeText(allocationRows().map((row) => row.join("\t")).join("\n"))
-    .then(() => showToast("结果已复制"))
-    .catch(() => showToast("复制失败，可以用下载 CSV"));
-}
-
-function downloadCsv() {
-  const csv = allocationRows()
-    .map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(","))
-    .join("\n");
-  const blob = new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = "推车捆物结果.csv";
-  link.click();
-  URL.revokeObjectURL(url);
-  showToast("CSV 已下载");
 }
 
 document.querySelectorAll(".tab").forEach((tab) => {
@@ -299,7 +288,7 @@ document.addEventListener("click", (event) => {
   if (!button) return;
   const statusMap = {
     confirm: "已确认",
-    invalid: "无效",
+    invalid: "未通过",
   };
   state = updateRecord(button.dataset.id, { status: statusMap[button.dataset.action] });
   render();
@@ -349,8 +338,7 @@ els.rosterFile.addEventListener("change", () => {
     });
 });
 
-els.copyBtn.addEventListener("click", copyResults);
-els.downloadBtn.addEventListener("click", downloadCsv);
+els.allocationFilters.forEach((input) => input.addEventListener("change", renderAllocation));
 
 window.addEventListener("storage", () => {
   state = loadState();

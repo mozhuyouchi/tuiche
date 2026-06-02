@@ -230,6 +230,43 @@ h3 {
   gap: 7px;
 }
 
+.allocation-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.allocation-filter legend {
+  margin-right: 2px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.allocation-filter label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 38px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fff;
+  padding: 0 10px;
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.allocation-filter input {
+  width: 16px;
+  min-height: 16px;
+  accent-color: var(--mint);
+}
+
 .upload-box,
 .keyword-panel,
 .proof-upload {
@@ -302,7 +339,7 @@ h3 {
 
 .item-rule-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 96px;
+  grid-template-columns: minmax(0, 1fr) 86px;
   gap: 8px;
   align-items: center;
   border: 1px solid var(--line);
@@ -465,7 +502,7 @@ select:focus {
 }
 
 .roster-sheet {
-  min-width: 1180px;
+  min-width: 920px;
   table-layout: auto;
 }
 
@@ -515,6 +552,18 @@ select:focus {
   text-align: center;
 }
 
+.roster-matrix th:nth-child(5),
+.roster-matrix td:nth-child(5) {
+  min-width: 120px;
+  text-align: center;
+}
+
+.roster-matrix th:nth-child(6),
+.roster-matrix td:nth-child(6) {
+  min-width: 160px;
+  text-align: left;
+}
+
 .name-cell {
   display: grid;
   gap: 5px;
@@ -554,6 +603,26 @@ select:focus {
   color: var(--ink);
   font-weight: 800;
   white-space: normal;
+}
+
+.remaining-role-cell {
+  color: var(--ink);
+  font-weight: 800;
+  text-align: center;
+  vertical-align: top;
+  white-space: normal;
+}
+
+.overview-block {
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  line-height: 1.55;
+}
+
+.overview-block strong,
+.overview-block span {
+  display: block;
 }
 
 .push-status-cell {
@@ -864,6 +933,11 @@ tr:last-child td {
   background: var(--surface-strong);
   text-align: center;
   font-size: 13px;
+}
+
+.empty-table-cell {
+  color: var(--muted);
+  text-align: center;
 }
 
 .toast {
