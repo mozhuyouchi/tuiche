@@ -167,7 +167,11 @@ function recordCard(record) {
   const target = memberById(state, record.targetId);
   const targetName = target?.name || record.targetName || "未知";
   const title = record.claimType === "无效推车" ? `${escapeHtml(pusherName)} 申报无效推车` : `${escapeHtml(pusherName)} 推 ${escapeHtml(targetName)}`;
-  const targetText = record.claimType === "无效推车" ? "无对应被推人" : target ? `被推款：${escapeHtml(target.item || "未填")}` : `被推人：${escapeHtml(targetName)}`;
+  const targetConfirmText = record.targetConfirmed ? "已确认" : "未确认";
+  const targetText =
+    record.claimType === "无效推车"
+      ? "无对应被推人"
+      : `被推人：${escapeHtml(targetName)}（${targetConfirmText}）${target ? `｜被推款：${escapeHtml(target.item || "未填")}` : ""}`;
   const creditText = recordCreditText(record);
   return `
     <article class="record-card record-row-card">
@@ -199,8 +203,13 @@ function recordCreditText(record) {
 }
 
 function renderRecords() {
-  els.recordCount.textContent = `${state.records.length} 条`;
-  els.recordList.innerHTML = state.records.length ? state.records.map(recordCard).join("") : `<div class="empty">还没有推车记录</div>`;
+  const visibleRecords = adminVisibleRecords();
+  els.recordCount.textContent = `${visibleRecords.length} 条`;
+  els.recordList.innerHTML = visibleRecords.length ? visibleRecords.map(recordCard).join("") : `<div class="empty">还没有推车记录</div>`;
+}
+
+function adminVisibleRecords() {
+  return state.records.filter((record) => record.claimType === "无效推车" || record.targetConfirmed);
 }
 
 function renderAllocation() {

@@ -101,7 +101,7 @@ function myRecordCard(record) {
   const target = memberById(state, record.targetId);
   const targetName = target?.name || record.targetName || "未知";
   const title = record.claimType === "无效推车" ? "我申报无效推车" : `我推 ${escapeHtml(targetName)}`;
-  const confirmText = record.claimType === "无效推车" ? "无需被推人确认" : record.targetConfirmed ? "被推人已确认" : "待被推人确认";
+  const confirmText = memberRecordConfirmText(record);
   return `
     <article class="record-card">
       <div class="record-top">
@@ -116,6 +116,15 @@ function myRecordCard(record) {
       ${proofImageMarkup(record)}
     </article>
   `;
+}
+
+function memberRecordConfirmText(record) {
+  if (record.claimType === "无效推车") return "无需被推人确认，等团长审核";
+  if (!record.targetConfirmed) return "待被推人确认";
+  if (record.status === "待审核") return "被推人已确认，等团长审核";
+  if (record.status === "已确认") return "团长已通过";
+  if (record.status === "未通过") return "未通过";
+  return "被推人已确认";
 }
 
 function renderRecords() {
@@ -238,7 +247,7 @@ async function submitRecord() {
     proof: els.proofInput.value.trim(),
     proofImageName: selectedProofImage?.name || "",
     proofImageData: selectedProofImage?.dataUrl || "",
-    status: isInvalid ? "无效推车" : "待确认",
+    status: isInvalid ? "待审核" : "待确认",
     targetConfirmed: false,
   });
   els.proofInput.value = "";
@@ -246,7 +255,7 @@ async function submitRecord() {
   els.proofImageName.textContent = "可上传群聊截图或社媒截图";
   selectedProofImage = null;
   render();
-  showToast(isInvalid ? "已记录无效推车" : "已提交，等待被推人确认");
+  showToast(isInvalid ? "已提交，等待团长审核" : "已提交，等待被推人确认");
 }
 
 document.addEventListener("click", async (event) => {
@@ -260,8 +269,8 @@ document.addEventListener("click", async (event) => {
     return;
   }
   if (button.dataset.action === "confirm-target") {
-    state = updateRecord(button.dataset.id, { targetConfirmed: true, status: "已确认" });
-    showToast("已确认，计入有效状态");
+    state = updateRecord(button.dataset.id, { targetConfirmed: true, status: "待审核" });
+    showToast("已确认，等待团长审核");
   }
   if (button.dataset.action === "reject-target") {
     state = updateRecord(button.dataset.id, { targetConfirmed: false, status: "未通过" });

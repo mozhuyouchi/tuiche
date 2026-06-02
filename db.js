@@ -8,7 +8,8 @@ const demoRosterText = `昵称,款式,类型
 阿乖,胀相,不捆
 龙虾,五条,不捆
 凸凸,乙骨,不捆
-星星,真依,不捆
+星星,真依x10,捆物
+别静音,惠x3,捆物
 阿娇,五条,不捆`;
 
 const defaultKeywordRules = {
@@ -83,10 +84,11 @@ function defaultBox(name = "默认盲盒") {
     name,
     members,
     keywordRules: { ...defaultKeywordRules },
-    itemRules: { 五条: "捆2", 真依: "不捆" },
+    itemRules: { 五条: "捆2", 真依: "捆物", 惠: "捆物" },
     itemCatalog: [
       { name: "五条", category: "", price: 73.5, type: "捆2" },
-      { name: "真依", category: "", price: 4.5, type: "不捆" },
+      { name: "真依", category: "", price: 4.5, type: "捆物" },
+      { name: "惠", category: "", price: 0, type: "捆物" },
       { name: "胀相", category: "", price: 0, type: "不捆" },
       { name: "乙骨", category: "", price: 0, type: "不捆" },
     ],
@@ -410,8 +412,8 @@ function recordPusherMatches(state, record, member) {
 
 function recordValue(record) {
   if (record.status === "未通过") return 0;
-  if (record.claimType === "无效推车") return 0.5;
   if (record.status !== "已确认") return 0;
+  if (record.claimType === "无效推车") return 0.5;
   if (record.claimType === "有效推车") return 1;
   if (record.claimType === "小推车多") return 2;
   return 0;
@@ -535,6 +537,7 @@ function statusClass(status) {
 
 function statusText(status) {
   if (status === "已确认") return "通过";
+  if (status === "待审核") return "等审核";
   if (status === "无效推车") return "无效推车";
   if (status === "无效" || status === "未通过") return "未通过";
   return status;
