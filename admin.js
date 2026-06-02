@@ -9,6 +9,12 @@ const els = {
   cloudConnectBtn: document.querySelector("#cloudConnectBtn"),
   cloudDisconnectBtn: document.querySelector("#cloudDisconnectBtn"),
   adminContent: document.querySelector("#adminContent"),
+  boxSelect: document.querySelector("#boxSelect"),
+  boxNameInput: document.querySelector("#boxNameInput"),
+  boxCount: document.querySelector("#boxCount"),
+  addBoxBtn: document.querySelector("#addBoxBtn"),
+  renameBoxBtn: document.querySelector("#renameBoxBtn"),
+  deleteBoxBtn: document.querySelector("#deleteBoxBtn"),
   fileName: document.querySelector("#fileName"),
   rosterInput: document.querySelector("#rosterInput"),
   itemRuleList: document.querySelector("#itemRuleList"),
@@ -352,6 +358,7 @@ function currentItemRules() {
 
 function render() {
   renderCloudControls();
+  renderBoxControls();
   if (document.activeElement !== els.rosterInput) {
     els.rosterInput.value = rosterTextFromMembers();
   }
@@ -360,6 +367,19 @@ function render() {
   renderRecords();
   renderAllocation();
   renderSummary();
+}
+
+function renderBoxControls() {
+  const boxes = state.boxes || [];
+  els.boxCount.textContent = `${boxes.length} 个`;
+  els.boxSelect.innerHTML = boxes
+    .map((box) => `<option value="${escapeHtml(box.id)}">${escapeHtml(box.name)}</option>`)
+    .join("");
+  els.boxSelect.value = state.activeBoxId || boxes[0]?.id || "";
+  if (document.activeElement !== els.boxNameInput) {
+    els.boxNameInput.value = state.activeBoxName || "";
+  }
+  els.deleteBoxBtn.disabled = boxes.length <= 1;
 }
 
 function renderCloudControls() {
@@ -520,6 +540,44 @@ els.cloudDisconnectBtn.addEventListener("click", () => {
   clearCloudConfig();
   renderCloudControls();
   showToast("已退出管理端");
+});
+
+els.boxSelect.addEventListener("change", () => {
+  state = setActiveBox(els.boxSelect.value);
+  pendingItemCatalog = [];
+  render();
+});
+
+els.addBoxBtn.addEventListener("click", () => {
+  const name = window.prompt("新盲盒名称", `盲盒${(state.boxes || []).length + 1}`);
+  if (!name) return;
+  state = addBox(name);
+  pendingItemCatalog = [];
+  render();
+  showToast("已新增盲盒");
+});
+
+els.renameBoxBtn.addEventListener("click", () => {
+  const name = els.boxNameInput.value.trim();
+  if (!name) {
+    showToast("请填写盲盒名称");
+    return;
+  }
+  state = renameActiveBox(name);
+  render();
+  showToast("已重命名盲盒");
+});
+
+els.deleteBoxBtn.addEventListener("click", () => {
+  if ((state.boxes || []).length <= 1) {
+    showToast("至少保留一个盲盒");
+    return;
+  }
+  if (!window.confirm(`确定删除「${state.activeBoxName}」吗？这个盲盒里的排表和推车记录都会删除。`)) return;
+  state = deleteActiveBox();
+  pendingItemCatalog = [];
+  render();
+  showToast("已删除盲盒");
 });
 
 els.memberList.addEventListener("change", (event) => {

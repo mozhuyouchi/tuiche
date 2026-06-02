@@ -262,6 +262,24 @@ h3 {
   margin: 12px 0;
 }
 
+.box-panel {
+  grid-column: 1 / -1;
+}
+
+.box-manager {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) minmax(180px, 1fr) auto auto auto;
+  gap: 10px;
+  align-items: end;
+  margin-top: 12px;
+}
+
+.danger-button {
+  color: #a7291f;
+  border-color: #ffc8c0;
+  background: var(--coral-soft);
+}
+
 .allocation-filter {
   display: flex;
   flex-wrap: wrap;
@@ -1033,6 +1051,8 @@ tr:last-child td {
   .entry-grid,
   .admin-grid,
   .member-grid,
+  .box-manager,
+  .gate-grid,
   .form-grid,
   .record-row-card {
     grid-template-columns: 1fr;

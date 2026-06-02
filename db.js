@@ -1,5 +1,6 @@
 const CAR_DB_KEY = "car-push-tool-v2";
 const CAR_CLOUD_KEY = "car-cloud-config-v1";
+const CAR_ACTIVE_BOX_KEY = "car-active-box-id-v1";
 const SUPABASE_URL = "https://uvfecqqfrxsfmdtvxydz.supabase.co";
 const SUPABASE_PUBLIC_KEY = "sb_publishable_Qo39DhmeDPub_TMs3WtGHw_eXlLfTMT";
 
@@ -16,6 +17,7 @@ const defaultKeywordRules = {
 };
 
 const legacyRemovedStatus = "\u4e89\u8bae";
+const boxFieldKeys = ["members", "keywordRules", "itemRules", "itemCatalog", "records", "allocationAssignments", "allocationExcludedIds"];
 
 function makeId(prefix) {
   if (crypto.randomUUID) return crypto.randomUUID();
@@ -73,10 +75,12 @@ function parseRoster(text, keywordRules = defaultKeywordRules) {
     });
 }
 
-function defaultState() {
+function defaultBox(name = "默认盲盒") {
   const members = parseRoster(demoRosterText, defaultKeywordRules);
   const byName = Object.fromEntries(members.map((member) => [member.name, member]));
   return {
+    id: makeId("box"),
+    name,
     members,
     keywordRules: { ...defaultKeywordRules },
     itemRules: { 五条: "捆2", 真依: "不捆" },
@@ -105,6 +109,14 @@ function defaultState() {
   };
 }
 
+function defaultState() {
+  const box = defaultBox("默认盲盒");
+  return normalizeState({
+    boxes: [box],
+    activeBoxId: box.id,
+  });
+}
+
 function loadState() {
   const saved = localStorage.getItem(CAR_DB_KEY);
   if (!saved) {
@@ -113,23 +125,7 @@ function loadState() {
     return state;
   }
   try {
-    const state = JSON.parse(saved);
-    const records = Array.isArray(state.records)
-      ? state.records.map((record) => (record.status === legacyRemovedStatus ? { ...record, status: "未通过" } : record))
-      : [];
-    return {
-      members: Array.isArray(state.members)
-        ? state.members.map((member) => ({ ...member, type: normalizeBindType(member.type) }))
-        : [],
-      records,
-      keywordRules: state.keywordRules || { ...defaultKeywordRules },
-      itemRules: Object.fromEntries(Object.entries(state.itemRules || {}).map(([item, type]) => [item, normalizeBindType(type)])),
-      itemCatalog: Array.isArray(state.itemCatalog)
-        ? state.itemCatalog.map((item) => ({ ...item, type: normalizeBindType(item.type) }))
-        : [],
-      allocationAssignments: state.allocationAssignments && typeof state.allocationAssignments === "object" ? state.allocationAssignments : {},
-      allocationExcludedIds: Array.isArray(state.allocationExcludedIds) ? state.allocationExcludedIds : [],
-    };
+    return normalizeState(JSON.parse(saved));
   } catch {
     const state = defaultState();
     saveState(state);
@@ -138,27 +134,118 @@ function loadState() {
 }
 
 function saveState(state) {
-  localStorage.setItem(CAR_DB_KEY, JSON.stringify(state));
-  queueCloudSave(state);
+  const storageState = stateForStorage(state);
+  localStorage.setItem(CAR_DB_KEY, JSON.stringify(storageState));
+  localStorage.setItem(CAR_ACTIVE_BOX_KEY, storageState.activeBoxId);
+  queueCloudSave(storageState);
 }
 
 function normalizeState(state = {}) {
-  const records = Array.isArray(state.records)
-    ? state.records.map((record) => (record.status === legacyRemovedStatus ? { ...record, status: "未通过" } : record))
+  const boxes = Array.isArray(state.boxes) && state.boxes.length
+    ? state.boxes.map((box, index) => normalizeBox(box, `盲盒${index + 1}`))
+    : [normalizeBox(state, "默认盲盒")];
+  const localActiveBoxId = localStorage.getItem(CAR_ACTIVE_BOX_KEY);
+  const activeBoxId = boxes.some((box) => box.id === localActiveBoxId)
+    ? localActiveBoxId
+    : boxes.some((box) => box.id === state.activeBoxId)
+      ? state.activeBoxId
+      : boxes[0].id;
+  const activeBox = boxes.find((box) => box.id === activeBoxId) || boxes[0];
+  return {
+    boxes,
+    activeBoxId,
+    activeBoxName: activeBox.name,
+    ...boxFields(activeBox),
+  };
+}
+
+function normalizeBox(box = {}, fallbackName = "默认盲盒") {
+  const records = Array.isArray(box.records)
+    ? box.records.map((record) => (record.status === legacyRemovedStatus ? { ...record, status: "未通过" } : record))
     : [];
   return {
-    members: Array.isArray(state.members)
-      ? state.members.map((member) => ({ ...member, type: normalizeBindType(member.type) }))
+    id: box.id || makeId("box"),
+    name: String(box.name || fallbackName).trim() || fallbackName,
+    members: Array.isArray(box.members)
+      ? box.members.map((member) => ({ ...member, type: normalizeBindType(member.type) }))
       : [],
     records,
-    keywordRules: state.keywordRules || { ...defaultKeywordRules },
-    itemRules: Object.fromEntries(Object.entries(state.itemRules || {}).map(([item, type]) => [item, normalizeBindType(type)])),
-    itemCatalog: Array.isArray(state.itemCatalog)
-      ? state.itemCatalog.map((item) => ({ ...item, type: normalizeBindType(item.type) }))
+    keywordRules: box.keywordRules || { ...defaultKeywordRules },
+    itemRules: Object.fromEntries(Object.entries(box.itemRules || {}).map(([item, type]) => [item, normalizeBindType(type)])),
+    itemCatalog: Array.isArray(box.itemCatalog)
+      ? box.itemCatalog.map((item) => ({ ...item, type: normalizeBindType(item.type) }))
       : [],
-    allocationAssignments: state.allocationAssignments && typeof state.allocationAssignments === "object" ? state.allocationAssignments : {},
-    allocationExcludedIds: Array.isArray(state.allocationExcludedIds) ? state.allocationExcludedIds : [],
+    allocationAssignments: box.allocationAssignments && typeof box.allocationAssignments === "object" ? box.allocationAssignments : {},
+    allocationExcludedIds: Array.isArray(box.allocationExcludedIds) ? box.allocationExcludedIds : [],
   };
+}
+
+function boxFields(source) {
+  return Object.fromEntries(boxFieldKeys.map((key) => [key, source[key]]));
+}
+
+function stateForStorage(state = {}) {
+  const boxes = Array.isArray(state.boxes) && state.boxes.length
+    ? state.boxes.map((box, index) => normalizeBox(box, `盲盒${index + 1}`))
+    : [normalizeBox(state, "默认盲盒")];
+  const localActiveBoxId = localStorage.getItem(CAR_ACTIVE_BOX_KEY);
+  const activeBoxId = boxes.some((box) => box.id === state.activeBoxId)
+    ? state.activeBoxId
+    : boxes.some((box) => box.id === localActiveBoxId)
+      ? localActiveBoxId
+      : boxes[0].id;
+  const hasActiveFields = boxFieldKeys.some((key) => Object.prototype.hasOwnProperty.call(state, key));
+  const storedBoxes = boxes.map((box) =>
+    box.id === activeBoxId && hasActiveFields
+      ? normalizeBox({ ...box, name: state.activeBoxName || box.name, ...boxFields(state) }, box.name)
+      : box
+  );
+  return {
+    boxes: storedBoxes,
+    activeBoxId,
+  };
+}
+
+function setActiveBox(boxId) {
+  const storageState = stateForStorage(loadState());
+  const targetBox = storageState.boxes.find((box) => box.id === boxId);
+  if (!targetBox) return loadState();
+  storageState.activeBoxId = targetBox.id;
+  localStorage.setItem(CAR_ACTIVE_BOX_KEY, targetBox.id);
+  window.carCloudPauseSave = true;
+  localStorage.setItem(CAR_DB_KEY, JSON.stringify(storageState));
+  window.carCloudPauseSave = false;
+  return normalizeState(storageState);
+}
+
+function addBox(name) {
+  const storageState = stateForStorage(loadState());
+  const newBox = normalizeBox({ id: makeId("box"), name: name || `盲盒${storageState.boxes.length + 1}` }, `盲盒${storageState.boxes.length + 1}`);
+  storageState.boxes.push(newBox);
+  storageState.activeBoxId = newBox.id;
+  return persistStorageState(storageState);
+}
+
+function renameActiveBox(name) {
+  const storageState = stateForStorage(loadState());
+  storageState.boxes = storageState.boxes.map((box) => (box.id === storageState.activeBoxId ? { ...box, name: String(name || box.name).trim() || box.name } : box));
+  return persistStorageState(storageState);
+}
+
+function deleteActiveBox() {
+  const storageState = stateForStorage(loadState());
+  if (storageState.boxes.length <= 1) return normalizeState(storageState);
+  const index = storageState.boxes.findIndex((box) => box.id === storageState.activeBoxId);
+  storageState.boxes = storageState.boxes.filter((box) => box.id !== storageState.activeBoxId);
+  storageState.activeBoxId = storageState.boxes[Math.max(0, index - 1)]?.id || storageState.boxes[0].id;
+  return persistStorageState(storageState);
+}
+
+function persistStorageState(storageState) {
+  localStorage.setItem(CAR_ACTIVE_BOX_KEY, storageState.activeBoxId);
+  const clean = normalizeState(storageState);
+  saveState(clean);
+  return clean;
 }
 
 function cloudConfig() {

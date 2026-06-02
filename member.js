@@ -7,6 +7,7 @@ const els = {
   cloudGroupCode: document.querySelector("#cloudGroupCode"),
   cloudConnectBtn: document.querySelector("#cloudConnectBtn"),
   cloudDisconnectBtn: document.querySelector("#cloudDisconnectBtn"),
+  boxSelect: document.querySelector("#boxSelect"),
   meSelect: document.querySelector("#meSelect"),
   mySummary: document.querySelector("#mySummary"),
   targetField: document.querySelector("#targetField"),
@@ -136,10 +137,19 @@ function renderRecords() {
 
 function render() {
   renderCloudControls();
+  renderBoxControls();
   renderSelects();
   updateClaimTypeFields();
   renderSummary();
   renderRecords();
+}
+
+function renderBoxControls() {
+  const boxes = state.boxes || [];
+  els.boxSelect.innerHTML = boxes
+    .map((box) => `<option value="${escapeHtml(box.id)}">${escapeHtml(box.name)}</option>`)
+    .join("");
+  els.boxSelect.value = state.activeBoxId || boxes[0]?.id || "";
 }
 
 function renderCloudControls() {
@@ -269,6 +279,10 @@ els.cloudDisconnectBtn.addEventListener("click", () => {
   clearCloudConfig();
   renderCloudControls();
   showToast("已断开云同步");
+});
+els.boxSelect.addEventListener("change", () => {
+  state = setActiveBox(els.boxSelect.value);
+  render();
 });
 els.claimType.addEventListener("change", updateClaimTypeFields);
 els.proofImage.addEventListener("change", () => {

@@ -41,6 +41,26 @@
       </section>
 
       <main class="admin-grid is-hidden" id="adminContent">
+        <section class="panel box-panel">
+          <div class="section-title">
+            <h2>盲盒项目</h2>
+            <span id="boxCount">0 个</span>
+          </div>
+          <div class="box-manager">
+            <label class="field">
+              <span>当前盲盒</span>
+              <select id="boxSelect"></select>
+            </label>
+            <label class="field">
+              <span>盲盒名称</span>
+              <input id="boxNameInput" type="text" placeholder="例如：生肖款" autocomplete="off" />
+            </label>
+            <button class="ghost-button" id="renameBoxBtn" type="button">重命名</button>
+            <button class="ghost-button" id="addBoxBtn" type="button">新增盲盒</button>
+            <button class="ghost-button danger-button" id="deleteBoxBtn" type="button">删除盲盒</button>
+          </div>
+        </section>
+
         <aside class="panel import-panel">
           <div class="panel-head">
             <h2>排表导入</h2>
