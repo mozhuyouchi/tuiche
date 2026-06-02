@@ -107,7 +107,6 @@ function memberBindItems(member) {
   const entries = [];
   itemQuantityMap(member.item).forEach((quantity, itemName) => {
     const type = itemRuleForName(state, itemName);
-    if (bindRank(type) <= 0 && type !== "捆物") return;
     const category = itemCategoryForName(state, itemName);
     entries.push(`${itemName}x${trimNumber(quantity)}｜${type}${category ? `｜${category}` : ""}`);
   });
