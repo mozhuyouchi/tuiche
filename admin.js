@@ -357,6 +357,7 @@ function currentItemRules() {
 }
 
 function render() {
+  state = ensureBoxState(state);
   renderCloudControls();
   renderBoxControls();
   if (document.activeElement !== els.rosterInput) {
@@ -370,6 +371,7 @@ function render() {
 }
 
 function renderBoxControls() {
+  state = ensureBoxState(state);
   const boxes = state.boxes || [];
   els.boxCount.textContent = `${boxes.length} 个`;
   els.boxSelect.innerHTML = boxes
@@ -380,6 +382,19 @@ function renderBoxControls() {
     els.boxNameInput.value = state.activeBoxName || "";
   }
   els.deleteBoxBtn.disabled = boxes.length <= 1;
+}
+
+function ensureBoxState(nextState) {
+  const normalized = normalizeState(nextState);
+  if (!Array.isArray(normalized.boxes) || !normalized.boxes.length) {
+    return normalizeState(defaultState());
+  }
+  if (!Array.isArray(nextState.boxes) || !nextState.boxes.length) {
+    window.carCloudPauseSave = true;
+    saveState(normalized);
+    window.carCloudPauseSave = false;
+  }
+  return normalized;
 }
 
 function renderCloudControls() {
@@ -549,7 +564,11 @@ els.boxSelect.addEventListener("change", () => {
 });
 
 els.addBoxBtn.addEventListener("click", () => {
-  const name = window.prompt("新盲盒名称", `盲盒${(state.boxes || []).length + 1}`);
+  const typedName = els.boxNameInput.value.trim();
+  const currentName = state.activeBoxName || "";
+  const name = typedName && typedName !== currentName
+    ? typedName
+    : window.prompt("新盲盒名称", `盲盒${(state.boxes || []).length + 1}`);
   if (!name) return;
   state = addBox(name);
   pendingItemCatalog = [];

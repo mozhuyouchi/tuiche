@@ -136,6 +136,7 @@ function renderRecords() {
 }
 
 function render() {
+  state = normalizeState(state);
   renderCloudControls();
   renderBoxControls();
   renderSelects();
