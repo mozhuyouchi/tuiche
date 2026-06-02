@@ -530,8 +530,20 @@ select:focus {
 
 .roster-matrix th:first-child,
 .roster-matrix td:first-child {
+  min-width: 62px;
+  text-align: center;
+}
+
+.roster-matrix th:nth-child(2),
+.roster-matrix td:nth-child(2) {
   min-width: 110px;
   text-align: left;
+}
+
+.exclude-cell input {
+  width: 18px;
+  min-height: 18px;
+  accent-color: var(--mint);
 }
 
 .roster-matrix th:nth-child(2),

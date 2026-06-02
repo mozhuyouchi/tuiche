@@ -24,7 +24,7 @@
           <h2>请输入cn</h2>
           <label class="field">
             <span>我的昵称</span>
-            <select id="meSelect"></select>
+            <input id="meSelect" type="text" placeholder="输入你的cn" autocomplete="off" />
           </label>
           <div class="my-summary" id="mySummary"></div>
         </section>
@@ -36,13 +36,12 @@
               <span>申报类型</span>
               <select id="claimType">
                 <option value="有效推车">有效推车</option>
-                <option value="小推车多">小推车多</option>
                 <option value="无效推车">无效推车</option>
               </select>
             </label>
             <label class="field" id="targetField">
               <span>被推来的人</span>
-              <select id="targetSelect"></select>
+              <input id="targetSelect" type="text" placeholder="输入对方cn" autocomplete="off" />
             </label>
             <label class="field wide">
               <span>凭证/备注</span>

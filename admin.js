@@ -15,6 +15,7 @@ const els = {
   recordCount: document.querySelector("#recordCount"),
   allocationBody: document.querySelector("#allocationBody"),
   allocationFilters: document.querySelectorAll("[data-allocation-filter]"),
+  allocationAssignBtn: document.querySelector("#allocationAssignBtn"),
   hotCount: document.querySelector("#hotCount"),
   confirmedCount: document.querySelector("#confirmedCount"),
   pendingCount: document.querySelector("#pendingCount"),
@@ -49,6 +50,14 @@ function renderMembers() {
           : "";
       return `
         <tr>
+          <td class="exclude-cell">
+            <input
+              aria-label="${escapeHtml(member.name)} 不参与上捆"
+              data-allocation-exclude="${escapeHtml(member.id)}"
+              type="checkbox"
+              ${isAllocationExcluded(member) ? "checked" : ""}
+            />
+          </td>
           <td class="name-cell">
             <strong>${escapeHtml(member.name)}</strong>
           </td>
@@ -67,6 +76,7 @@ function renderMembers() {
       <table class="roster-sheet roster-matrix">
         <thead>
           <tr>
+            <th class="exclude-cell">已带余</th>
             <th>昵称</th>
             <th>list</th>
             <th>被捆数量</th>
@@ -119,6 +129,10 @@ function memberPushStatus(member) {
   return memberStateLabel(state, member);
 }
 
+function isAllocationExcluded(member) {
+  return Array.isArray(state.allocationExcludedIds) && state.allocationExcludedIds.includes(member.id);
+}
+
 function itemQuantityMap(itemText) {
   const map = new Map();
   String(itemText || "")
@@ -138,9 +152,11 @@ function itemQuantityMap(itemText) {
 
 function recordCard(record) {
   const pusher = memberById(state, record.pusherId);
+  const pusherName = pusher?.name || record.pusherName || "未知";
   const target = memberById(state, record.targetId);
-  const title = record.claimType === "无效推车" ? `${escapeHtml(pusher?.name || "未知")} 申报无效推车` : `${escapeHtml(pusher?.name || "未知")} 推 ${escapeHtml(target?.name || "未知")}`;
-  const targetText = record.claimType === "无效推车" ? "无对应被推人" : `被推款：${escapeHtml(target?.item || "未填")}`;
+  const targetName = target?.name || record.targetName || "未知";
+  const title = record.claimType === "无效推车" ? `${escapeHtml(pusherName)} 申报无效推车` : `${escapeHtml(pusherName)} 推 ${escapeHtml(targetName)}`;
+  const targetText = record.claimType === "无效推车" ? "无对应被推人" : target ? `被推款：${escapeHtml(target.item || "未填")}` : `被推人：${escapeHtml(targetName)}`;
   const creditText = recordCreditText(record);
   return `
     <article class="record-card record-row-card">
@@ -187,18 +203,108 @@ function renderAllocation() {
       const reduction = memberReduction(state, member.id);
       const bundle = memberBundle(state, member);
       const bundleClass = bundle === 0 ? "bundle-zero" : bundle >= 2 ? "bundle-two" : "";
+      const assignedText = allocationAssignmentText(state, member, bundle);
       return `
         <tr>
           <td>${escapeHtml(member.name)}</td>
           <td>${escapeHtml(member.item)}</td>
           <td><span class="tag ${tagClass(member.type)}">${member.type}</span></td>
           <td>${memberBaseBundle(state, member) > 0 ? trimNumber(reduction) : "-"}</td>
-          <td class="${bundleClass}">${bundle === 0 ? "不捆" : trimNumber(bundle)}</td>
           <td>${memberStateLabel(state, member)}</td>
+          <td class="${bundleClass}">${assignedText}</td>
         </tr>
       `;
     })
     .join("");
+}
+
+function allocationAssignmentText(state, member, bundle) {
+  const assigned = state.allocationAssignments?.[member.id];
+  if (Array.isArray(assigned) && assigned.length) {
+    return assigned.map((item) => `${escapeHtml(item.name)}x${trimNumber(item.quantity)}`).join("、");
+  }
+  return bundle === 0 ? "不捆" : trimNumber(bundle);
+}
+
+function assignRemainingBundles() {
+  const recipients = filteredAllocationMembers().filter((member) => memberBundle(state, member) > 0);
+  if (!recipients.length) {
+    state.allocationAssignments = {};
+    saveState(state);
+    renderAllocation();
+    showToast("当前筛选下没有需要上捆的人");
+    return;
+  }
+
+  const pool = remainingBundlePool();
+  if (!pool.some((item) => item.quantity > 0)) {
+    state.allocationAssignments = {};
+    saveState(state);
+    renderAllocation();
+    showToast("没有可分配的捆物");
+    return;
+  }
+
+  const slots = shuffle(
+    recipients.flatMap((member) => {
+      const memberSlots = [];
+      let remaining = memberBundle(state, member);
+      while (remaining > 0) {
+        const quantity = Math.min(1, remaining);
+        memberSlots.push({ memberId: member.id, quantity });
+        remaining = trimFloat(remaining - quantity);
+      }
+      return memberSlots;
+    })
+  );
+
+  const assignments = {};
+  slots.forEach((slot) => {
+    const available = pool.filter((item) => item.quantity > 0);
+    if (!available.length) return;
+    const picked = available[Math.floor(Math.random() * available.length)];
+    const quantity = Math.min(slot.quantity, picked.quantity);
+    picked.quantity = trimFloat(picked.quantity - quantity);
+    if (!assignments[slot.memberId]) assignments[slot.memberId] = [];
+    assignments[slot.memberId].push({ name: picked.name, quantity });
+  });
+
+  state.allocationAssignments = Object.fromEntries(
+    Object.entries(assignments).map(([memberId, items]) => [memberId, mergeAssignedItems(items)])
+  );
+  saveState(state);
+  renderAllocation();
+  showToast("已随机上捆");
+}
+
+function remainingBundlePool() {
+  const totals = new Map();
+  state.members.forEach((member) => {
+    itemQuantityMap(member.item).forEach((quantity, itemName) => {
+      if (itemRuleForName(state, itemName) !== "捆物") return;
+      totals.set(itemName, (Number(totals.get(itemName)) || 0) + Number(quantity));
+    });
+  });
+  return Array.from(totals.entries()).map(([name, quantity]) => ({ name, quantity: Number(quantity) || 0 }));
+}
+
+function mergeAssignedItems(items) {
+  const totals = new Map();
+  items.forEach((item) => totals.set(item.name, (Number(totals.get(item.name)) || 0) + Number(item.quantity)));
+  return Array.from(totals.entries()).map(([name, quantity]) => ({ name, quantity: trimFloat(quantity) }));
+}
+
+function shuffle(items) {
+  const result = [...items];
+  for (let index = result.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [result[index], result[swapIndex]] = [result[swapIndex], result[index]];
+  }
+  return result;
+}
+
+function trimFloat(value) {
+  return Number(Number(value).toFixed(6));
 }
 
 function allocationFilterTypes() {
@@ -209,7 +315,14 @@ function allocationFilterTypes() {
 
 function filteredAllocationMembers() {
   const allowedTypes = allocationFilterTypes();
-  return state.members.filter((member) => allowedTypes.includes(normalizeBindType(member.type)));
+  return state.members
+    .map((member, index) => ({ member, index }))
+    .filter(({ member }) => allowedTypes.includes(normalizeBindType(member.type)) && !isAllocationExcluded(member))
+    .sort((a, b) => {
+      const rankDiff = bindRank(normalizeBindType(b.member.type)) - bindRank(normalizeBindType(a.member.type));
+      return rankDiff || a.index - b.index;
+    })
+    .map(({ member }) => member);
 }
 
 function renderSummary() {
@@ -291,6 +404,8 @@ document.addEventListener("click", (event) => {
     invalid: "未通过",
   };
   state = updateRecord(button.dataset.id, { status: statusMap[button.dataset.action] });
+  state.allocationAssignments = {};
+  saveState(state);
   render();
   showToast(`已标记为${statusText(statusMap[button.dataset.action])}`);
 });
@@ -338,7 +453,24 @@ els.rosterFile.addEventListener("change", () => {
     });
 });
 
+els.memberList.addEventListener("change", (event) => {
+  const input = event.target.closest("[data-allocation-exclude]");
+  if (!input) return;
+
+  const excludedIds = new Set(state.allocationExcludedIds || []);
+  if (input.checked) {
+    excludedIds.add(input.dataset.allocationExclude);
+    delete state.allocationAssignments?.[input.dataset.allocationExclude];
+  } else {
+    excludedIds.delete(input.dataset.allocationExclude);
+  }
+  state.allocationExcludedIds = Array.from(excludedIds);
+  saveState(state);
+  renderAllocation();
+});
+
 els.allocationFilters.forEach((input) => input.addEventListener("change", renderAllocation));
+els.allocationAssignBtn.addEventListener("click", assignRemainingBundles);
 
 window.addEventListener("storage", () => {
   state = loadState();

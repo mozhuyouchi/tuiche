@@ -97,6 +97,8 @@ function defaultState() {
           }
         : null,
     ].filter(Boolean),
+    allocationAssignments: {},
+    allocationExcludedIds: [],
   };
 }
 
@@ -122,6 +124,8 @@ function loadState() {
       itemCatalog: Array.isArray(state.itemCatalog)
         ? state.itemCatalog.map((item) => ({ ...item, type: normalizeBindType(item.type) }))
         : [],
+      allocationAssignments: state.allocationAssignments && typeof state.allocationAssignments === "object" ? state.allocationAssignments : {},
+      allocationExcludedIds: Array.isArray(state.allocationExcludedIds) ? state.allocationExcludedIds : [],
     };
   } catch {
     const state = defaultState();
@@ -140,9 +144,13 @@ function replaceMembersFromRoster(text, keywordRules = defaultKeywordRules, item
   state.itemRules = Object.fromEntries(Object.entries(keywordRules.itemRules || {}).map(([item, type]) => [item, normalizeBindType(type)]));
   state.itemCatalog = itemCatalog.map((item) => ({ ...item, type: normalizeBindType(item.type) }));
   state.members = parseRoster(text, state.keywordRules);
+  state.allocationAssignments = {};
+  state.allocationExcludedIds = [];
   state.records = state.records.filter((record) => {
-    const hasPusher = state.members.some((member) => member.id === record.pusherId);
-    const hasTarget = !record.targetId || state.members.some((member) => member.id === record.targetId);
+    const hasManualName = Boolean(record.pusherName || record.targetName);
+    const hasPusher = state.members.some((member) => member.id === record.pusherId || member.name === record.pusherName);
+    const hasTarget = !record.targetId || state.members.some((member) => member.id === record.targetId || member.name === record.targetName);
+    if (hasManualName) return true;
     return hasPusher && hasTarget;
   });
   saveState(state);
@@ -186,6 +194,16 @@ function memberById(state, id) {
   return state.members.find((member) => member.id === id);
 }
 
+function memberByName(state, name) {
+  const cleanName = String(name || "").trim();
+  if (!cleanName) return undefined;
+  return state.members.find((member) => member.name === cleanName);
+}
+
+function recordPusherMatches(state, record, member) {
+  return record.pusherId === member.id || (record.pusherName && record.pusherName === member.name);
+}
+
 function recordValue(record) {
   if (record.status === "未通过") return 0;
   if (record.claimType === "无效推车") return 0.5;
@@ -196,8 +214,9 @@ function recordValue(record) {
 }
 
 function memberReduction(state, memberId) {
+  const member = memberById(state, memberId);
   return state.records
-    .filter((record) => record.pusherId === memberId)
+    .filter((record) => (member ? recordPusherMatches(state, record, member) : record.pusherId === memberId))
     .reduce((total, record) => total + recordValue(record), 0);
 }
 

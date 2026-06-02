@@ -1,5 +1,5 @@
 let state = loadState();
-let currentMemberId = localStorage.getItem("car-current-member") || state.members[0]?.id || "";
+let savedMemberName = localStorage.getItem("car-current-member-name") || "";
 let selectedProofImage = null;
 
 const els = {
@@ -19,16 +19,21 @@ const els = {
 };
 
 function currentMember() {
-  return memberById(state, currentMemberId) || state.members[0];
+  const name = els.meSelect.value.trim();
+  const matched = memberByName(state, name);
+  if (matched) return matched;
+  if (!name) return null;
+  return {
+    id: `manual-${name}`,
+    name,
+    item: "未导入",
+    type: "不捆",
+    isManual: true,
+  };
 }
 
 function renderSelects() {
-  const options = state.members
-    .map((member) => `<option value="${member.id}">${escapeHtml(member.name)}｜${escapeHtml(member.item)}</option>`)
-    .join("");
-  els.meSelect.innerHTML = options;
-  els.targetSelect.innerHTML = options;
-  els.meSelect.value = currentMember()?.id || "";
+  if (!els.meSelect.value && savedMemberName) els.meSelect.value = savedMemberName;
 }
 
 function updateClaimTypeFields() {
@@ -40,7 +45,17 @@ function updateClaimTypeFields() {
 function renderSummary() {
   const me = currentMember();
   if (!me) {
-    els.mySummary.innerHTML = `<div class="empty">团长还没有导入排表</div>`;
+    els.mySummary.innerHTML = `<div class="empty">输入cn后可以先提交推车</div>`;
+    return;
+  }
+  if (me.isManual) {
+    els.mySummary.innerHTML = `
+      <div class="summary-card">
+        <span class="tag normal">未导入</span>
+        <strong>${escapeHtml(me.name)}</strong>
+        <p>排表导入后会按昵称自动对上</p>
+      </div>
+    `;
     return;
   }
   const bundle = memberBundle(state, me);
@@ -57,10 +72,11 @@ function renderSummary() {
 
 function confirmCard(record) {
   const pusher = memberById(state, record.pusherId);
+  const pusherName = pusher?.name || record.pusherName || "未知";
   return `
     <article class="record-card">
       <div class="record-top">
-        <strong>${escapeHtml(pusher?.name || "未知")} 说 TA 推了你</strong>
+        <strong>${escapeHtml(pusherName)} 说 TA 推了你</strong>
         <span class="status ${statusClass(record.status)}">${statusText(record.status)}</span>
       </div>
       <div class="record-meta">
@@ -78,7 +94,8 @@ function confirmCard(record) {
 
 function myRecordCard(record) {
   const target = memberById(state, record.targetId);
-  const title = record.claimType === "无效推车" ? "我申报无效推车" : `我推 ${escapeHtml(target?.name || "未知")}`;
+  const targetName = target?.name || record.targetName || "未知";
+  const title = record.claimType === "无效推车" ? "我申报无效推车" : `我推 ${escapeHtml(targetName)}`;
   const confirmText = record.claimType === "无效推车" ? "无需被推人确认" : record.targetConfirmed ? "被推人已确认" : "待被推人确认";
   return `
     <article class="record-card">
@@ -99,12 +116,14 @@ function myRecordCard(record) {
 function renderRecords() {
   const me = currentMember();
   if (!me) {
-    els.confirmList.innerHTML = `<div class="empty">暂无排表</div>`;
-    els.myRecordList.innerHTML = `<div class="empty">暂无排表</div>`;
+    els.confirmCount.textContent = "0 条";
+    els.myRecordCount.textContent = "0 条";
+    els.confirmList.innerHTML = `<div class="empty">输入cn后查看确认</div>`;
+    els.myRecordList.innerHTML = `<div class="empty">输入cn后查看提交记录</div>`;
     return;
   }
-  const toConfirm = state.records.filter((record) => record.targetId === me.id && record.status === "待确认");
-  const mine = state.records.filter((record) => record.pusherId === me.id);
+  const toConfirm = state.records.filter((record) => (record.targetId === me.id || record.targetName === me.name) && record.status === "待确认");
+  const mine = state.records.filter((record) => record.pusherId === me.id || record.pusherName === me.name);
   els.confirmCount.textContent = `${toConfirm.length} 条`;
   els.myRecordCount.textContent = `${mine.length} 条`;
   els.confirmList.innerHTML = toConfirm.length ? toConfirm.map(confirmCard).join("") : `<div class="empty">没有需要你确认的推车</div>`;
@@ -121,17 +140,25 @@ function render() {
 function submitRecord() {
   const me = currentMember();
   if (!me) {
-    showToast("团长还没有导入排表");
+    showToast("请先输入cn");
     return;
   }
   const isInvalid = els.claimType.value === "无效推车";
-  if (!isInvalid && me.id === els.targetSelect.value) {
+  const targetName = els.targetSelect.value.trim();
+  const target = memberByName(state, targetName);
+  if (!isInvalid && !targetName) {
+    showToast("请填写被推来的人");
+    return;
+  }
+  if (!isInvalid && me.name === targetName) {
     showToast("不能把自己填成被推来的人");
     return;
   }
   state = addRecord({
-    pusherId: me.id,
-    targetId: isInvalid ? "" : els.targetSelect.value,
+    pusherId: me.isManual ? "" : me.id,
+    pusherName: me.name,
+    targetId: isInvalid || !target ? "" : target.id,
+    targetName: isInvalid ? "" : targetName,
     claimType: els.claimType.value,
     proof: els.proofInput.value.trim(),
     proofImageName: selectedProofImage?.name || "",
@@ -161,9 +188,9 @@ document.addEventListener("click", (event) => {
   render();
 });
 
-els.meSelect.addEventListener("change", () => {
-  currentMemberId = els.meSelect.value;
-  localStorage.setItem("car-current-member", currentMemberId);
+els.meSelect.addEventListener("input", () => {
+  savedMemberName = els.meSelect.value.trim();
+  localStorage.setItem("car-current-member-name", savedMemberName);
   render();
 });
 els.claimType.addEventListener("change", updateClaimTypeFields);
