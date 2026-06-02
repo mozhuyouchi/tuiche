@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>团员端 - 推车提交</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell compact-shell">
+      <header class="topbar">
+        <div>
+          <h1>团员端</h1>
+          <p>只管自己的事：提交推车、确认别人是否推了你、看自己最后捆几个。</p>
+        </div>
+        <nav class="top-actions" aria-label="页面入口">
+          <a class="ghost-link" href="admin.html">管理端</a>
+          <a class="ghost-link" href="index.html">返回入口</a>
+        </nav>
+      </header>
+
+      <main class="member-grid">
+        <section class="panel identity-panel">
+          <h2>请输入cn</h2>
+          <label class="field">
+            <span>我的昵称</span>
+            <select id="meSelect"></select>
+          </label>
+          <div class="my-summary" id="mySummary"></div>
+        </section>
+
+        <section class="panel submit-panel">
+          <h2>提交推车</h2>
+          <div class="form-grid member-form">
+            <label class="field">
+              <span>申报类型</span>
+              <select id="claimType">
+                <option value="有效推车">有效推车</option>
+                <option value="小推车多">小推车多</option>
+                <option value="无效推车">无效推车</option>
+              </select>
+            </label>
+            <label class="field" id="targetField">
+              <span>被推来的人</span>
+              <select id="targetSelect"></select>
+            </label>
+            <label class="field wide">
+              <span>凭证/备注</span>
+              <input id="proofInput" type="text" placeholder="例如：群聊截图、社媒链接、对方昵称说明" />
+            </label>
+            <label class="proof-upload wide" for="proofImage">
+              <strong>上传截图</strong>
+              <span id="proofImageName">可上传群聊截图或社媒截图</span>
+              <input id="proofImage" type="file" accept="image/*" />
+            </label>
+          </div>
+          <button class="primary-button" id="addRecordBtn" type="button">提交推车记录</button>
+        </section>
+
+        <section class="panel">
+          <div class="section-title">
+            <h2>需要我确认</h2>
+            <span id="confirmCount">0 条</span>
+          </div>
+          <div class="record-list" id="confirmList"></div>
+        </section>
+
+        <section class="panel">
+          <div class="section-title">
+            <h2>我提交的记录</h2>
+            <span id="myRecordCount">0 条</span>
+          </div>
+          <div class="record-list" id="myRecordList"></div>
+        </section>
+      </main>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="db.js"></script>
+    <script src="member.js"></script>
+  </body>
+</html>

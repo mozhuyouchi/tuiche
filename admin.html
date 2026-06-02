@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>团长端 - 推车管理</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <h1>团长 / 管理端</h1>
+          <p>这里看全数据：排表、推车记录、确认状态和最终捆物。</p>
+        </div>
+        <nav class="top-actions" aria-label="页面入口">
+          <a class="ghost-link" href="member.html">团员端</a>
+          <a class="ghost-link" href="index.html">返回入口</a>
+        </nav>
+      </header>
+
+      <main class="admin-grid">
+        <aside class="panel import-panel">
+          <div class="panel-head">
+            <h2>排表导入</h2>
+            <button class="ghost-button" id="loadDemoBtn" type="button">恢复示例</button>
+          </div>
+          <label class="upload-box" for="rosterFile">
+            <strong>上传排表文件</strong>
+            <span id="fileName">支持 XLSX / CSV / TXT，上传后会填入下方排表框</span>
+            <input id="rosterFile" type="file" accept=".xlsx,.csv,.txt,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,text/plain" />
+          </label>
+          <textarea class="hidden-input" id="rosterInput" spellcheck="false"></textarea>
+          <section class="keyword-panel" id="itemRulePanel" aria-label="捆序设置">
+            <div class="section-title">
+              <h3>捆序设置</h3>
+              <span id="itemRuleSummary">上传表格后自动识别</span>
+            </div>
+            <div class="item-rule-list" id="itemRuleList"></div>
+            <p class="hint">款式会按单价从高到低排列。逐个选择捆2、捆1、备捆或不捆后再导入。</p>
+          </section>
+          <button class="primary-button" id="importBtn" type="button">导入并覆盖成员</button>
+          <p class="hint">请先上传表格。系统会识别“分类 / 种类 / 单价 / 昵称 / 数量”。</p>
+
+        </aside>
+
+        <section class="panel main-panel">
+          <div class="tabs" role="tablist" aria-label="管理页切换">
+            <button class="tab active" data-tab="records" type="button">推车记录</button>
+            <button class="tab" data-tab="allocation" type="button">分配结果</button>
+          </div>
+
+          <section class="tab-page active" id="recordsPage">
+            <div class="section-title">
+              <h2>全部推车记录</h2>
+              <span id="recordCount">0 条</span>
+            </div>
+            <div class="record-list wide-list" id="recordList"></div>
+          </section>
+
+          <section class="tab-page" id="allocationPage">
+            <div class="allocation-toolbar">
+              <div>
+                <h2>最终捆物表</h2>
+                <p>只算捆物数量，不改变原排谷优先级。</p>
+              </div>
+              <div class="toolbar-actions">
+                <button class="ghost-button" id="copyBtn" type="button">复制结果</button>
+                <button class="ghost-button" id="downloadBtn" type="button">下载 CSV</button>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>成员</th>
+                    <th>吃款</th>
+                    <th>捆序</th>
+                    <th>有效减免</th>
+                    <th>最终捆物</th>
+                    <th>状态</th>
+                  </tr>
+                </thead>
+                <tbody id="allocationBody"></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+
+        <aside class="panel summary-panel">
+          <h2>实时总览</h2>
+          <div class="stat-grid">
+            <div class="stat stat-wide">
+              <span>可捆数量</span>
+              <strong id="hotCount">0</strong>
+            </div>
+            <div class="stat">
+              <span>已交推车</span>
+              <strong id="confirmedCount">0</strong>
+            </div>
+            <div class="stat">
+              <span>未交推车</span>
+              <strong id="pendingCount">0</strong>
+            </div>
+          </div>
+
+          <section class="explain">
+            <h3>团员入口</h3>
+            <p>团员只需要打开团员端，选择自己的昵称后提交或确认。管理端会同步看到状态变化。</p>
+          </section>
+
+          <section class="explain">
+            <h3>当前数据库</h3>
+            <p>本地原型用浏览器存储模拟共用数据库。正式上线时，这层可换成云数据库。</p>
+          </section>
+        </aside>
+
+        <section class="panel roster-panel">
+          <div class="section-title">
+            <h2>排表生成表</h2>
+            <span id="memberCount">0 人</span>
+          </div>
+          <div class="member-list" id="memberList"></div>
+        </section>
+      </main>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="db.js"></script>
+    <script src="admin.js"></script>
+  </body>
+</html>
