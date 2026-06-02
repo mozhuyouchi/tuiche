@@ -19,7 +19,28 @@
         </nav>
       </header>
 
-      <main class="admin-grid">
+      <section class="panel admin-gate" id="adminGate">
+        <div class="section-title">
+          <h2>管理验证</h2>
+          <span id="cloudStatus">未连接</span>
+        </div>
+        <div class="gate-grid">
+          <label class="field">
+            <span>团号</span>
+            <input id="cloudGroupCode" type="text" placeholder="例如：renji0602" autocomplete="off" />
+          </label>
+          <label class="field">
+            <span>管理密码</span>
+            <input id="cloudAdminPin" type="password" placeholder="团长自己记住" autocomplete="off" />
+          </label>
+        </div>
+        <div class="cloud-actions">
+          <button class="primary-button" id="cloudConnectBtn" type="button">进入管理端</button>
+          <button class="ghost-button" id="cloudDisconnectBtn" type="button">退出</button>
+        </div>
+      </section>
+
+      <main class="admin-grid is-hidden" id="adminContent">
         <aside class="panel import-panel">
           <div class="panel-head">
             <h2>排表导入</h2>
@@ -114,7 +135,7 @@
 
           <section class="explain">
             <h3>当前数据库</h3>
-            <p>本地原型用浏览器存储模拟共用数据库。正式上线时，这层可换成云数据库。</p>
+            <p>连接云同步后，团长端和团员端会使用同一个团号下的数据。</p>
           </section>
         </aside>
 

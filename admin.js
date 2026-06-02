@@ -3,6 +3,12 @@ let pendingItemCatalog = [];
 
 const els = {
   rosterFile: document.querySelector("#rosterFile"),
+  cloudStatus: document.querySelector("#cloudStatus"),
+  cloudGroupCode: document.querySelector("#cloudGroupCode"),
+  cloudAdminPin: document.querySelector("#cloudAdminPin"),
+  cloudConnectBtn: document.querySelector("#cloudConnectBtn"),
+  cloudDisconnectBtn: document.querySelector("#cloudDisconnectBtn"),
+  adminContent: document.querySelector("#adminContent"),
   fileName: document.querySelector("#fileName"),
   rosterInput: document.querySelector("#rosterInput"),
   itemRuleList: document.querySelector("#itemRuleList"),
@@ -345,6 +351,7 @@ function currentItemRules() {
 }
 
 function render() {
+  renderCloudControls();
   if (document.activeElement !== els.rosterInput) {
     els.rosterInput.value = rosterTextFromMembers();
   }
@@ -353,6 +360,61 @@ function render() {
   renderRecords();
   renderAllocation();
   renderSummary();
+}
+
+function renderCloudControls() {
+  const config = cloudConfig();
+  if (!els.cloudGroupCode.value && config.groupCode) els.cloudGroupCode.value = config.groupCode;
+  if (!els.cloudAdminPin.value && config.adminPin) els.cloudAdminPin.value = config.adminPin;
+  const unlocked = isCloudReady(config) && config.role === "admin";
+  els.cloudStatus.textContent = unlocked ? `已进入：${config.groupCode}` : "未连接";
+  els.adminContent.classList.toggle("is-hidden", !unlocked);
+}
+
+async function connectAdminCloud() {
+  const groupCode = els.cloudGroupCode.value.trim();
+  const adminPin = els.cloudAdminPin.value.trim();
+  if (!groupCode) {
+    showToast("请先填写团号");
+    return;
+  }
+  if (!adminPin) {
+    showToast("请设置管理密码");
+    return;
+  }
+
+  els.cloudConnectBtn.disabled = true;
+  try {
+    const remoteState = await createCloudGroup(groupCode, adminPin, loadState());
+    setCloudConfig({ groupCode, adminPin, role: "admin" });
+    state = adoptCloudState(remoteState);
+    pendingItemCatalog = [];
+    render();
+    showToast("云端已连接");
+  } catch (error) {
+    console.error(error);
+    showToast("云端连接失败");
+  } finally {
+    els.cloudConnectBtn.disabled = false;
+  }
+}
+
+async function loadCloudOnStart() {
+  const config = cloudConfig();
+  if (!isCloudReady(config) || config.role !== "admin") {
+    renderCloudControls();
+    return;
+  }
+  try {
+    state = adoptCloudState(await loadCloudState(config.groupCode));
+    pendingItemCatalog = [];
+    render();
+    showToast("已载入云端数据");
+  } catch (error) {
+    console.error(error);
+    showToast("云端载入失败，先显示本地缓存");
+    renderCloudControls();
+  }
 }
 
 function renderItemRules(items) {
@@ -453,6 +515,13 @@ els.rosterFile.addEventListener("change", () => {
     });
 });
 
+els.cloudConnectBtn.addEventListener("click", connectAdminCloud);
+els.cloudDisconnectBtn.addEventListener("click", () => {
+  clearCloudConfig();
+  renderCloudControls();
+  showToast("已退出管理端");
+});
+
 els.memberList.addEventListener("change", (event) => {
   const input = event.target.closest("[data-allocation-exclude]");
   if (!input) return;
@@ -478,6 +547,7 @@ window.addEventListener("storage", () => {
 });
 
 render();
+loadCloudOnStart();
 
 async function readRosterFile(file) {
   if (/\.xlsx$/i.test(file.name)) {

@@ -1,4 +1,7 @@
 const CAR_DB_KEY = "car-push-tool-v2";
+const CAR_CLOUD_KEY = "car-cloud-config-v1";
+const SUPABASE_URL = "https://uvfecqqfrxsfmdtvxydz.supabase.co";
+const SUPABASE_PUBLIC_KEY = "sb_publishable_Qo39DhmeDPub_TMs3WtGHw_eXlLfTMT";
 
 const demoRosterText = `昵称,款式,类型
 阿乖,胀相,不捆
@@ -136,6 +139,120 @@ function loadState() {
 
 function saveState(state) {
   localStorage.setItem(CAR_DB_KEY, JSON.stringify(state));
+  queueCloudSave(state);
+}
+
+function normalizeState(state = {}) {
+  const records = Array.isArray(state.records)
+    ? state.records.map((record) => (record.status === legacyRemovedStatus ? { ...record, status: "未通过" } : record))
+    : [];
+  return {
+    members: Array.isArray(state.members)
+      ? state.members.map((member) => ({ ...member, type: normalizeBindType(member.type) }))
+      : [],
+    records,
+    keywordRules: state.keywordRules || { ...defaultKeywordRules },
+    itemRules: Object.fromEntries(Object.entries(state.itemRules || {}).map(([item, type]) => [item, normalizeBindType(type)])),
+    itemCatalog: Array.isArray(state.itemCatalog)
+      ? state.itemCatalog.map((item) => ({ ...item, type: normalizeBindType(item.type) }))
+      : [],
+    allocationAssignments: state.allocationAssignments && typeof state.allocationAssignments === "object" ? state.allocationAssignments : {},
+    allocationExcludedIds: Array.isArray(state.allocationExcludedIds) ? state.allocationExcludedIds : [],
+  };
+}
+
+function cloudConfig() {
+  try {
+    return JSON.parse(localStorage.getItem(CAR_CLOUD_KEY) || "{}");
+  } catch {
+    return {};
+  }
+}
+
+function setCloudConfig(config) {
+  const clean = {
+    groupCode: String(config.groupCode || "").trim(),
+    adminPin: String(config.adminPin || "").trim(),
+    role: config.role === "admin" ? "admin" : "member",
+  };
+  localStorage.setItem(CAR_CLOUD_KEY, JSON.stringify(clean));
+  return clean;
+}
+
+function clearCloudConfig() {
+  localStorage.removeItem(CAR_CLOUD_KEY);
+}
+
+function isCloudReady(config = cloudConfig()) {
+  return Boolean(config.groupCode && config.role);
+}
+
+async function cloudRpc(functionName, body) {
+  const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${functionName}`, {
+    method: "POST",
+    headers: {
+      apikey: SUPABASE_PUBLIC_KEY,
+      Authorization: `Bearer ${SUPABASE_PUBLIC_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || `云数据库请求失败：${response.status}`);
+  }
+  const text = await response.text();
+  return text ? JSON.parse(text) : null;
+}
+
+async function loadCloudState(groupCode) {
+  const remoteState = await cloudRpc("car_get_state", { p_group_code: groupCode });
+  return normalizeState(remoteState || {});
+}
+
+async function createCloudGroup(groupCode, adminPin, state) {
+  const remoteState = await cloudRpc("car_create_group", {
+    p_group_code: groupCode,
+    p_admin_pin: adminPin,
+    p_state: state,
+  });
+  return normalizeState(remoteState || {});
+}
+
+async function saveCloudState(state, config = cloudConfig()) {
+  if (!isCloudReady(config)) return false;
+  if (config.role === "admin") {
+    if (!config.adminPin) return false;
+    return cloudRpc("car_admin_save_state", {
+      p_group_code: config.groupCode,
+      p_admin_pin: config.adminPin,
+      p_state: state,
+    });
+  }
+  return cloudRpc("car_member_save_state", {
+    p_group_code: config.groupCode,
+    p_state: state,
+  });
+}
+
+function queueCloudSave(state) {
+  const config = cloudConfig();
+  if (!isCloudReady(config) || window.carCloudPauseSave) return;
+  window.clearTimeout(window.carCloudSaveTimer);
+  window.carCloudSaveTimer = window.setTimeout(() => {
+    saveCloudState(state, config).catch((error) => {
+      console.warn("Cloud save failed", error);
+      if (typeof showToast === "function") showToast("云端保存失败，稍后再试");
+    });
+  }, 250);
+}
+
+function adoptCloudState(remoteState) {
+  const clean = normalizeState(remoteState);
+  window.carCloudPauseSave = true;
+  saveState(clean);
+  window.carCloudPauseSave = false;
+  return clean;
 }
 
 function replaceMembersFromRoster(text, keywordRules = defaultKeywordRules, itemCatalog = []) {
@@ -227,7 +344,7 @@ function memberBundle(state, member) {
 
 function memberStateLabel(state, member) {
   const bundle = memberBundle(state, member);
-  const records = state.records.filter((record) => record.pusherId === member.id && record.status !== "未通过");
+  const records = state.records.filter((record) => recordPusherMatches(state, record, member) && record.status !== "未通过");
   if (records.some((record) => record.claimType !== "无效推车" && record.status === "已确认")) return "有效";
   if (records.some((record) => record.claimType === "无效推车")) return "无效";
   if (bundle > 0) return `${trimNumber(memberBindUnitCount(state, member))}+躺吃`;

@@ -230,6 +230,38 @@ h3 {
   gap: 7px;
 }
 
+.cloud-panel {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-strong);
+  padding: 12px;
+}
+
+.member-cloud {
+  margin-bottom: 18px;
+}
+
+.cloud-actions {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+
+.admin-gate {
+  max-width: 720px;
+  margin: 0 auto 16px;
+}
+
+.gate-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 12px 0;
+}
+
 .allocation-filter {
   display: flex;
   flex-wrap: wrap;

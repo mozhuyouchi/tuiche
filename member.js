@@ -3,6 +3,10 @@ let savedMemberName = localStorage.getItem("car-current-member-name") || "";
 let selectedProofImage = null;
 
 const els = {
+  cloudStatus: document.querySelector("#cloudStatus"),
+  cloudGroupCode: document.querySelector("#cloudGroupCode"),
+  cloudConnectBtn: document.querySelector("#cloudConnectBtn"),
+  cloudDisconnectBtn: document.querySelector("#cloudDisconnectBtn"),
   meSelect: document.querySelector("#meSelect"),
   mySummary: document.querySelector("#mySummary"),
   targetField: document.querySelector("#targetField"),
@@ -131,13 +135,73 @@ function renderRecords() {
 }
 
 function render() {
+  renderCloudControls();
   renderSelects();
   updateClaimTypeFields();
   renderSummary();
   renderRecords();
 }
 
-function submitRecord() {
+function renderCloudControls() {
+  const config = cloudConfig();
+  if (!els.cloudGroupCode.value && config.groupCode) els.cloudGroupCode.value = config.groupCode;
+  els.cloudStatus.textContent = isCloudReady(config) && config.role === "member" ? `已连接：${config.groupCode}` : "未连接";
+}
+
+async function connectMemberCloud() {
+  const groupCode = els.cloudGroupCode.value.trim();
+  if (!groupCode) {
+    showToast("请先填写团号");
+    return;
+  }
+
+  els.cloudConnectBtn.disabled = true;
+  try {
+    setCloudConfig({ groupCode, role: "member" });
+    state = adoptCloudState(await loadCloudState(groupCode));
+    render();
+    showToast("已连接云端");
+  } catch (error) {
+    console.error(error);
+    clearCloudConfig();
+    renderCloudControls();
+    showToast("云端连接失败");
+  } finally {
+    els.cloudConnectBtn.disabled = false;
+  }
+}
+
+async function loadCloudOnStart() {
+  const config = cloudConfig();
+  if (!isCloudReady(config) || config.role !== "member") {
+    renderCloudControls();
+    return;
+  }
+  try {
+    state = adoptCloudState(await loadCloudState(config.groupCode));
+    render();
+    showToast("已载入云端数据");
+  } catch (error) {
+    console.error(error);
+    showToast("云端载入失败，先显示本地缓存");
+    renderCloudControls();
+  }
+}
+
+async function refreshCloudBeforeWrite() {
+  const config = cloudConfig();
+  if (!isCloudReady(config) || config.role !== "member") return;
+  state = adoptCloudState(await loadCloudState(config.groupCode));
+}
+
+async function submitRecord() {
+  try {
+    await refreshCloudBeforeWrite();
+  } catch (error) {
+    console.error(error);
+    showToast("云端刷新失败，请稍后再交");
+    return;
+  }
   const me = currentMember();
   if (!me) {
     showToast("请先输入cn");
@@ -174,9 +238,16 @@ function submitRecord() {
   showToast(isInvalid ? "已记录无效推车" : "已提交，等待被推人确认");
 }
 
-document.addEventListener("click", (event) => {
+document.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-action]");
   if (!button) return;
+  try {
+    await refreshCloudBeforeWrite();
+  } catch (error) {
+    console.error(error);
+    showToast("云端刷新失败，请稍后再试");
+    return;
+  }
   if (button.dataset.action === "confirm-target") {
     state = updateRecord(button.dataset.id, { targetConfirmed: true, status: "已确认" });
     showToast("已确认，计入有效状态");
@@ -192,6 +263,12 @@ els.meSelect.addEventListener("input", () => {
   savedMemberName = els.meSelect.value.trim();
   localStorage.setItem("car-current-member-name", savedMemberName);
   render();
+});
+els.cloudConnectBtn.addEventListener("click", connectMemberCloud);
+els.cloudDisconnectBtn.addEventListener("click", () => {
+  clearCloudConfig();
+  renderCloudControls();
+  showToast("已断开云同步");
 });
 els.claimType.addEventListener("change", updateClaimTypeFields);
 els.proofImage.addEventListener("change", () => {
@@ -227,3 +304,4 @@ window.addEventListener("storage", () => {
 });
 
 render();
+loadCloudOnStart();
