@@ -209,7 +209,7 @@ function renderRecords() {
 }
 
 function adminVisibleRecords() {
-  return state.records.filter((record) => record.claimType === "无效推车" || record.targetConfirmed);
+  return state.records;
 }
 
 function renderAllocation() {
