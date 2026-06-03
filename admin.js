@@ -43,7 +43,6 @@ function renderMembers() {
   const overview = rosterOverview();
   const overviewHtml = `
     <div class="overview-block">
-      <strong>可成配数：${trimNumber(overview.setCount)}</strong>
       <span>角色剩余：${escapeHtml(overview.remainingText)}</span>
     </div>
   `;
