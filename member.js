@@ -302,11 +302,11 @@ els.proofImage.addEventListener("change", () => {
     els.proofImageName.textContent = "可上传群聊截图或社媒截图";
     return;
   }
-  if (file.size > 2 * 1024 * 1024) {
+  if (file.size > 5 * 1024 * 1024) {
     els.proofImage.value = "";
     selectedProofImage = null;
     els.proofImageName.textContent = "可上传群聊截图或社媒截图";
-    showToast("截图太大了，请上传 2MB 以内的图片");
+    showToast("截图太大了，请上传 5MB 以内的图片");
     return;
   }
   const reader = new FileReader();
