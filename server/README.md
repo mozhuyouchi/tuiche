@@ -45,7 +45,7 @@ location /api/ {
 const CUSTOM_API_BASE_URL = "";
 ```
 
-改成朋友给你的接口地址：
+阿里云的接口地址：
 
 ```js
 const CUSTOM_API_BASE_URL = "https://api.example.com/api";
