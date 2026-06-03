@@ -1,6 +1,7 @@
 const CAR_DB_KEY = "car-push-tool-v2";
 const CAR_CLOUD_KEY = "car-cloud-config-v1";
 const CAR_ACTIVE_BOX_KEY = "car-active-box-id-v1";
+const CUSTOM_API_BASE_URL = "";
 const SUPABASE_URL = "https://uvfecqqfrxsfmdtvxydz.supabase.co";
 const SUPABASE_PUBLIC_KEY = "sb_publishable_Qo39DhmeDPub_TMs3WtGHw_eXlLfTMT";
 
@@ -277,6 +278,32 @@ function isCloudReady(config = cloudConfig()) {
 }
 
 async function cloudRpc(functionName, body) {
+  const apiBaseUrl = customApiBaseUrl();
+  if (apiBaseUrl) return customCloudRpc(apiBaseUrl, functionName, body);
+  return supabaseRpc(functionName, body);
+}
+
+function customApiBaseUrl() {
+  return String(localStorage.getItem("car-custom-api-base-url") || CUSTOM_API_BASE_URL || "").replace(/\/+$/, "");
+}
+
+async function customCloudRpc(apiBaseUrl, functionName, body) {
+  const response = await fetch(`${apiBaseUrl}/${functionName}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || `云数据库请求失败：${response.status}`);
+  }
+  const text = await response.text();
+  return text ? JSON.parse(text) : null;
+}
+
+async function supabaseRpc(functionName, body) {
   const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${functionName}`, {
     method: "POST",
     headers: {
