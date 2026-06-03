@@ -23,7 +23,7 @@ node aliyun-server.js
 PORT=3000 node aliyun-server.js
 ```
 
-数据会保存在同目录的 `car-states.json`，这个文件不要放到 GitHub。
+数据会保存在同目录的 `car-states.json`，这个文件不用放到 GitHub。
 
 ## Nginx 转发示例
 
