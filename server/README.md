@@ -23,7 +23,7 @@ node aliyun-server.js
 PORT=3000 node aliyun-server.js
 ```
 
-数据会保存在同目录的 `car-states.json`，这个文件不要放到 GitHub。
+数据会保存在同目录的 `car-states.json`，这个文件不用放到 GitHub。
 
 ## Nginx 转发示例
 
@@ -45,7 +45,7 @@ location /api/ {
 const CUSTOM_API_BASE_URL = "";
 ```
 
-改成朋友给你的接口地址：
+阿里云的接口地址：
 
 ```js
 const CUSTOM_API_BASE_URL = "https://api.example.com/api";
