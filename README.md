@@ -112,6 +112,6 @@
 
 ### 原项目
 
-- 原作者：Morsecode-A（https://github.com/Morsecode-A/car）
+- 原作者：Morsecode-A（ https://github.com/Morsecode-A/car ）
 - 原始用途：咒术回战人机学院谷团专用
 - 核心功能：排表导入、捆序判定、推车记录、上捆分配
