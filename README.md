@@ -110,12 +110,8 @@
 - 分配结果页新增「导出 CSV」按钮
 - 错误提示改为显示服务器具体原因（不再笼统"连接失败"）
 
-**Bug 修复：**
-- 修复删除/编辑记录后页面不立即更新（根因：`state.records` 扁平列表和 `state.boxes[].records` 嵌套结构不同步，在 `saveState` 中增加同步逻辑）
-- 修复自动刷新覆盖本地修改（增加 3 秒变更保护时间戳）
-
 ### 原项目
 
-- 原作者：Morsecode-A（https://github.com/Morsecode-A/car.git）
+- 原作者：Morsecode-A（https://github.com/Morsecode-A/car）
 - 原始用途：咒术回战人机学院谷团专用
 - 核心功能：排表导入、捆序判定、推车记录、上捆分配
