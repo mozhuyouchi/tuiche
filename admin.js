@@ -7,7 +7,11 @@ const els = {
   cloudGroupCode: document.querySelector("#cloudGroupCode"),
   cloudAdminPin: document.querySelector("#cloudAdminPin"),
   cloudConnectBtn: document.querySelector("#cloudConnectBtn"),
-  cloudDisconnectBtn: document.querySelector("#cloudDisconnectBtn"),
+  adminGateWrap: document.querySelector("#adminGateWrap"),
+  adminConnectedBar: document.querySelector("#adminConnectedBar"),
+  connectedGroupLabel: document.querySelector("#connectedGroupLabel"),
+  adminSwitchBtn: document.querySelector("#adminSwitchBtn"),
+  adminExitBtn: document.querySelector("#adminExitBtn"),
   adminContent: document.querySelector("#adminContent"),
   boxSelect: document.querySelector("#boxSelect"),
   boxNameInput: document.querySelector("#boxNameInput"),
@@ -28,6 +32,7 @@ const els = {
   allocationBody: document.querySelector("#allocationBody"),
   allocationFilters: document.querySelectorAll("[data-allocation-filter]"),
   allocationAssignBtn: document.querySelector("#allocationAssignBtn"),
+  allocationExportBtn: document.querySelector("#allocationExportBtn"),
   hotCount: document.querySelector("#hotCount"),
   confirmedCount: document.querySelector("#confirmedCount"),
   pendingCount: document.querySelector("#pendingCount"),
@@ -172,24 +177,53 @@ function recordCard(record) {
       ? "无对应被推人"
       : `被推人：${escapeHtml(targetName)}（${targetConfirmText}）${target ? `｜被推款：${escapeHtml(target.item || "未填")}` : ""}`;
   const creditText = recordCreditText(record);
+  const timeText = formatTime(record.createdAt);
+  const claimOptions = ["有效推车", "无效推车", "小推车多"]
+    .map((opt) => `<option value="${opt}" ${record.claimType === opt ? "selected" : ""}>${opt}</option>`)
+    .join("");
   return `
-    <article class="record-card record-row-card">
-      <div>
-        <div class="record-top">
-          <strong>${title}</strong>
-          <span class="status ${statusClass(record.status)}">${statusText(record.status)}</span>
+    <article class="record-card record-row-card" id="record-${record.id}">
+      <div class="record-view">
+        <div>
+          <div class="record-top">
+            <strong>${title}</strong>
+            <span class="status ${statusClass(record.status)}">${statusText(record.status)}</span>
+          </div>
+          <div class="record-meta record-meta-inline">
+            <span>${record.claimType}</span>
+            <span>${creditText}</span>
+            <span>${targetText}</span>
+            <span class="record-time">${escapeHtml(timeText)}</span>
+          </div>
+          <p>${escapeHtml(record.proof || "没有填写凭证")}</p>
+          ${proofImageMarkup(record)}
         </div>
-        <div class="record-meta record-meta-inline">
-          <span>${record.claimType}</span>
-          <span>${creditText}</span>
-          <span>${targetText}</span>
+        <div class="record-actions">
+          <button class="mini-button confirm" data-action="confirm" data-id="${record.id}" type="button">通过</button>
+          <button class="mini-button" data-action="invalid" data-id="${record.id}" type="button">未通过</button>
+          <button class="mini-button" data-action="edit" data-id="${record.id}" type="button">编辑</button>
+          <button class="mini-button reject" data-action="delete" data-id="${record.id}" type="button">删除</button>
         </div>
-        <p>${escapeHtml(record.proof || "没有填写凭证")}</p>
-        ${proofImageMarkup(record)}
       </div>
-      <div class="record-actions">
-        <button class="mini-button confirm" data-action="confirm" data-id="${record.id}" type="button">通过</button>
-        <button class="mini-button" data-action="invalid" data-id="${record.id}" type="button">未通过</button>
+      <div class="record-edit is-hidden">
+        <div class="edit-form">
+          <label class="field">
+            <span>申报类型</span>
+            <select data-edit-field="claimType">${claimOptions}</select>
+          </label>
+          <label class="field">
+            <span>被推来的人</span>
+            <input data-edit-field="targetName" type="text" value="${escapeHtml(targetName)}" placeholder="输入对方cn" />
+          </label>
+          <label class="field wide">
+            <span>凭证/备注</span>
+            <input data-edit-field="proof" type="text" value="${escapeHtml(record.proof || "")}" placeholder="凭证说明" />
+          </label>
+          <div class="record-actions">
+            <button class="mini-button confirm" data-action="save-edit" data-id="${record.id}" type="button">保存</button>
+            <button class="mini-button" data-action="cancel-edit" data-id="${record.id}" type="button">取消</button>
+          </div>
+        </div>
       </div>
     </article>
   `;
@@ -347,10 +381,13 @@ function filteredAllocationMembers() {
 function renderSummary() {
   const bundledMembers = state.members.filter((member) => memberBaseBundle(state, member) > 0);
   const submittedBundledMembers = bundledMembers.filter((member) => state.records.some((record) => record.pusherId === member.id));
+  const pendingReviewCount = state.records.filter((r) => r.status === "待审核").length;
   els.hotCount.textContent = state.members
     .reduce((total, member) => total + memberBundle(state, member), 0);
   els.confirmedCount.textContent = submittedBundledMembers.length;
   els.pendingCount.textContent = bundledMembers.length - submittedBundledMembers.length;
+  const reviewEl = document.querySelector("#pendingReviewCount");
+  if (reviewEl) reviewEl.textContent = pendingReviewCount;
 }
 
 function rosterTextFromMembers() {
@@ -409,7 +446,12 @@ function renderCloudControls() {
   if (!els.cloudGroupCode.value && config.groupCode) els.cloudGroupCode.value = config.groupCode;
   if (!els.cloudAdminPin.value && config.adminPin) els.cloudAdminPin.value = config.adminPin;
   const unlocked = isCloudReady(config) && config.role === "admin";
-  els.cloudStatus.textContent = unlocked ? `已进入：${config.groupCode}` : "未连接";
+  els.adminGateWrap.classList.toggle("is-hidden", unlocked);
+  els.adminConnectedBar.classList.toggle("is-hidden", !unlocked);
+  if (unlocked && els.connectedGroupLabel) {
+    els.connectedGroupLabel.textContent = config.groupCode;
+  }
+  els.cloudStatus.textContent = unlocked ? "已连接" : "未连接";
   els.adminContent.classList.toggle("is-hidden", !unlocked);
 }
 
@@ -432,10 +474,10 @@ async function connectAdminCloud() {
     state = adoptCloudState(remoteState);
     pendingItemCatalog = [];
     render();
-    showToast("云端已连接");
+    showToast("已进入管理端");
   } catch (error) {
     console.error(error);
-    showToast("云端连接失败");
+    showToast(error.message || "连接失败");
   } finally {
     els.cloudConnectBtn.disabled = false;
   }
@@ -503,15 +545,79 @@ document.querySelectorAll(".tab").forEach((tab) => {
 document.addEventListener("click", (event) => {
   const button = event.target.closest("[data-action]");
   if (!button) return;
-  const statusMap = {
-    confirm: "已确认",
-    invalid: "未通过",
-  };
-  state = updateRecord(button.dataset.id, { status: statusMap[button.dataset.action] });
-  state.allocationAssignments = {};
-  saveState(state);
-  render();
-  showToast(`已标记为${statusText(statusMap[button.dataset.action])}`);
+  const id = button.dataset.id;
+
+  // Approve / Reject
+  if (button.dataset.action === "confirm" || button.dataset.action === "invalid") {
+    const statusMap = { confirm: "已确认", invalid: "未通过" };
+    const record = state.records.find((r) => r.id === id);
+    if (record) record.status = statusMap[button.dataset.action];
+    state.allocationAssignments = {};
+    saveState(state);
+    render();
+    showToast(`已标记为${statusText(statusMap[button.dataset.action])}`);
+    return;
+  }
+
+  // Delete
+  if (button.dataset.action === "delete") {
+    if (!window.confirm("确定删除这条推车记录吗？删除后不可恢复。")) return;
+    state.records = state.records.filter((r) => r.id !== id);
+    state.allocationAssignments = {};
+    saveState(state);
+    render();
+    showToast("已删除记录");
+    return;
+  }
+
+  // Enter edit mode
+  if (button.dataset.action === "edit") {
+    const card = document.querySelector(`#record-${id}`);
+    if (card) {
+      card.querySelector(".record-view").classList.add("is-hidden");
+      card.querySelector(".record-edit").classList.remove("is-hidden");
+    }
+    return;
+  }
+
+  // Cancel edit
+  if (button.dataset.action === "cancel-edit") {
+    const card = document.querySelector(`#record-${id}`);
+    if (card) {
+      card.querySelector(".record-view").classList.remove("is-hidden");
+      card.querySelector(".record-edit").classList.add("is-hidden");
+    }
+    return;
+  }
+
+  // Save edit
+  if (button.dataset.action === "save-edit") {
+    const card = document.querySelector(`#record-${id}`);
+    if (!card) return;
+    const claimType = card.querySelector("[data-edit-field='claimType']").value;
+    const targetName = card.querySelector("[data-edit-field='targetName']").value.trim();
+    const proof = card.querySelector("[data-edit-field='proof']").value.trim();
+    const target = memberByName(state, targetName);
+    const patch = {
+      claimType,
+      proof,
+      targetName: targetName || undefined,
+      targetId: target ? target.id : "",
+    };
+    // If claim type changed to 无效推车, clear target
+    if (claimType === "无效推车") {
+      patch.targetName = "";
+      patch.targetId = "";
+      patch.targetConfirmed = false;
+    }
+    const record = state.records.find((r) => r.id === id);
+    if (record) Object.assign(record, patch);
+    state.allocationAssignments = {};
+    saveState(state);
+    render();
+    showToast("已保存修改");
+    return;
+  }
 });
 
 els.importBtn.addEventListener("click", () => {
@@ -558,7 +664,12 @@ els.rosterFile.addEventListener("change", () => {
 });
 
 els.cloudConnectBtn.addEventListener("click", connectAdminCloud);
-els.cloudDisconnectBtn.addEventListener("click", () => {
+els.adminSwitchBtn.addEventListener("click", () => {
+  els.adminGateWrap.classList.remove("is-hidden");
+  els.adminConnectedBar.classList.add("is-hidden");
+  els.adminContent.classList.add("is-hidden");
+});
+els.adminExitBtn.addEventListener("click", () => {
   clearCloudConfig();
   renderCloudControls();
   showToast("已退出管理端");
@@ -624,14 +735,39 @@ els.memberList.addEventListener("change", (event) => {
 
 els.allocationFilters.forEach((input) => input.addEventListener("change", renderAllocation));
 els.allocationAssignBtn.addEventListener("click", assignRemainingBundles);
+els.allocationExportBtn.addEventListener("click", exportAllocation);
+
+function exportAllocation() {
+  const members = filteredAllocationMembers();
+  if (!members.length) { showToast("没有可导出的数据"); return; }
+  const lines = ["成员,吃款,捆序,有效推车数量,状态,捆物剩余"];
+  members.forEach((m) => {
+    const reduction = memberReduction(state, m.id);
+    const bundle = memberBundle(state, m);
+    const assigned = allocationAssignmentText(state, m, bundle);
+    lines.push(`${m.name},${(m.item || "").replace(/,/g,";")},${m.type},${memberBaseBundle(state,m)>0?trimNumber(reduction):"-"},${memberStateLabel(state,m)},${assigned}`);
+  });
+  const blob = new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = `捆物表_${state.activeBoxName || "export"}.csv`;
+  a.click(); URL.revokeObjectURL(url);
+  showToast("已导出 CSV");
+}
 
 window.addEventListener("storage", () => {
+  window._carStatePauseRefresh = true;
   state = loadState();
+  window._carStatePauseRefresh = false;
   render();
 });
 
 render();
 loadCloudOnStart();
+setupAutoRefresh(() => {
+  pendingItemCatalog = [];
+  render();
+}, 60);
 
 async function readRosterFile(file) {
   if (/\.xlsx$/i.test(file.name)) {

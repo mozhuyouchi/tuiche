@@ -20,11 +20,12 @@
 
       <main class="member-grid">
         <section class="panel identity-panel">
-          <section class="cloud-panel member-cloud" aria-label="云同步">
+          <section class="cloud-panel member-cloud" id="memberCloudPanel" aria-label="云同步">
             <div class="section-title">
-              <h2>云同步</h2>
+              <h2>首次配置</h2>
               <span id="cloudStatus">未连接</span>
             </div>
+            <p class="hint" style="margin-bottom:10px">首次使用请输入团号，之后会自动记住。</p>
             <label class="field">
               <span>团号</span>
               <input id="cloudGroupCode" type="text" placeholder="问团长要团号" autocomplete="off" />
@@ -35,14 +36,20 @@
             </label>
             <div class="cloud-actions">
               <button class="primary-button" id="cloudConnectBtn" type="button">连接</button>
-              <button class="ghost-button" id="cloudDisconnectBtn" type="button">断开</button>
             </div>
+          </section>
+
+          <section class="cloud-panel member-cloud is-hidden" id="memberConnectedBar" aria-label="连接状态" style="text-align:center">
+            <span style="margin-right:12px">团号：<strong id="connectedGroupLabel"></strong></span>
+            <button class="ghost-button" id="memberSwitchBtn" type="button" style="margin-right:6px">切换</button>
+            <button class="ghost-button danger-button" id="memberExitBtn" type="button">退出</button>
           </section>
 
           <h2>请输入cn</h2>
           <label class="field">
             <span>我的昵称</span>
-            <input id="meSelect" type="text" placeholder="输入你的cn" autocomplete="off" />
+            <input id="meSelect" type="text" placeholder="输入你的cn" autocomplete="off" list="memberSuggestions" />
+            <datalist id="memberSuggestions"></datalist>
           </label>
           <div class="my-summary" id="mySummary"></div>
         </section>
@@ -59,7 +66,8 @@
             </label>
             <label class="field" id="targetField">
               <span>被推来的人</span>
-              <input id="targetSelect" type="text" placeholder="输入对方cn" autocomplete="off" />
+              <input id="targetSelect" type="text" placeholder="输入对方cn" autocomplete="off" list="targetSuggestions" />
+              <datalist id="targetSuggestions"></datalist>
             </label>
             <label class="field wide">
               <span>凭证/备注</span>

@@ -19,25 +19,33 @@
         </nav>
       </header>
 
-      <section class="panel admin-gate" id="adminGate">
-        <div class="section-title">
-          <h2>管理验证</h2>
-          <span id="cloudStatus">未连接</span>
-        </div>
-        <div class="gate-grid">
-          <label class="field">
-            <span>团号</span>
-            <input id="cloudGroupCode" type="text" placeholder="例如：renji0602" autocomplete="off" />
-          </label>
-          <label class="field">
-            <span>管理密码</span>
-            <input id="cloudAdminPin" type="password" placeholder="团长自己记住" autocomplete="off" />
-          </label>
-        </div>
-        <div class="cloud-actions">
-          <button class="primary-button" id="cloudConnectBtn" type="button">进入管理端</button>
-          <button class="ghost-button" id="cloudDisconnectBtn" type="button">退出</button>
-        </div>
+      <div id="adminGateWrap">
+        <section class="panel admin-gate" id="adminGate">
+          <div class="section-title">
+            <h2>首次配置</h2>
+            <span id="cloudStatus">未连接</span>
+          </div>
+          <p class="hint" style="margin-bottom:12px">首次使用请设置团号和密码，之后会自动记住。</p>
+          <div class="gate-grid">
+            <label class="field">
+              <span>团号</span>
+              <input id="cloudGroupCode" type="text" placeholder="例如：renji0602" autocomplete="off" />
+            </label>
+            <label class="field">
+              <span>管理密码</span>
+              <input id="cloudAdminPin" type="password" placeholder="团长自己记住" autocomplete="off" />
+            </label>
+          </div>
+          <div class="cloud-actions">
+            <button class="primary-button" id="cloudConnectBtn" type="button">进入管理端</button>
+          </div>
+        </section>
+      </div>
+
+      <section class="panel admin-gate is-hidden" id="adminConnectedBar" style="text-align:center;padding:12px 18px">
+        <span style="margin-right:12px">当前团号：<strong id="connectedGroupLabel"></strong></span>
+        <button class="ghost-button" id="adminSwitchBtn" type="button" style="margin-right:6px">切换</button>
+        <button class="ghost-button danger-button" id="adminExitBtn" type="button">退出</button>
       </section>
 
       <main class="admin-grid is-hidden" id="adminContent">
@@ -81,7 +89,7 @@
             <p class="hint">款式会按单价从高到低排列。逐个选择捆2、捆1、备捆或不捆后再导入。</p>
           </section>
           <button class="primary-button" id="importBtn" type="button">导入并覆盖成员</button>
-          <p class="hint">请先上传表格。系统会识别“分类 / 种类 / 单价 / 昵称 / 数量”。</p>
+          <p class="hint">请先上传表格。系统会识别"分类 / 种类 / 单价 / 昵称 / 数量"。</p>
 
         </aside>
 
@@ -111,6 +119,7 @@
                   <label><input data-allocation-filter="备捆" type="checkbox" checked /> 备捆</label>
                 </fieldset>
                 <button class="mini-button assign-button" id="allocationAssignBtn" type="button">上捆</button>
+                <button class="mini-button" id="allocationExportBtn" type="button">导出</button>
               </div>
             </div>
             <div class="table-wrap">
@@ -141,6 +150,10 @@
             <div class="stat">
               <span>已交推车</span>
               <strong id="confirmedCount">0</strong>
+            </div>
+            <div class="stat">
+              <span>待审核</span>
+              <strong id="pendingReviewCount">0</strong>
             </div>
             <div class="stat">
               <span>未交推车</span>

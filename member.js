@@ -6,7 +6,11 @@ const els = {
   cloudStatus: document.querySelector("#cloudStatus"),
   cloudGroupCode: document.querySelector("#cloudGroupCode"),
   cloudConnectBtn: document.querySelector("#cloudConnectBtn"),
-  cloudDisconnectBtn: document.querySelector("#cloudDisconnectBtn"),
+  memberCloudPanel: document.querySelector("#memberCloudPanel"),
+  memberConnectedBar: document.querySelector("#memberConnectedBar"),
+  connectedGroupLabel: document.querySelector("#connectedGroupLabel"),
+  memberSwitchBtn: document.querySelector("#memberSwitchBtn"),
+  memberExitBtn: document.querySelector("#memberExitBtn"),
   boxSelect: document.querySelector("#boxSelect"),
   meSelect: document.querySelector("#meSelect"),
   mySummary: document.querySelector("#mySummary"),
@@ -39,6 +43,13 @@ function currentMember() {
 
 function renderSelects() {
   if (!els.meSelect.value && savedMemberName) els.meSelect.value = savedMemberName;
+  // Populate datalists with member names
+  const names = state.members.map((m) => m.name);
+  const nameOptions = names.map((n) => `<option value="${escapeHtml(n)}">`).join("");
+  const meList = document.querySelector("#memberSuggestions");
+  const targetList = document.querySelector("#targetSuggestions");
+  if (meList) meList.innerHTML = nameOptions;
+  if (targetList) targetList.innerHTML = nameOptions;
 }
 
 function updateClaimTypeFields() {
@@ -87,6 +98,7 @@ function confirmCard(record) {
       <div class="record-meta">
         <span>${record.claimType}</span>
         <span>${escapeHtml(record.proof || "没有填写凭证")}</span>
+        <span class="record-time">${formatTime(record.createdAt)}</span>
       </div>
       ${proofImageMarkup(record)}
       <div class="record-actions">
@@ -102,18 +114,48 @@ function myRecordCard(record) {
   const targetName = target?.name || record.targetName || "未知";
   const title = record.claimType === "无效推车" ? "我申报无效推车" : `我推 ${escapeHtml(targetName)}`;
   const confirmText = memberRecordConfirmText(record);
+  const claimOptions = ["有效推车", "无效推车"]
+    .map((opt) => `<option value="${opt}" ${record.claimType === opt ? "selected" : ""}>${opt}</option>`)
+    .join("");
   return `
-    <article class="record-card">
-      <div class="record-top">
-        <strong>${title}</strong>
-        <span class="status ${statusClass(record.status)}">${statusText(record.status)}</span>
+    <article class="record-card" id="record-${record.id}">
+      <div class="record-view">
+        <div class="record-top">
+          <strong>${title}</strong>
+          <span class="status ${statusClass(record.status)}">${statusText(record.status)}</span>
+        </div>
+        <div class="record-meta">
+          <span>${record.claimType}</span>
+          <span>${confirmText}</span>
+          <span class="record-time">${formatTime(record.createdAt)}</span>
+        </div>
+        <p>${escapeHtml(record.proof || "没有填写凭证")}</p>
+        ${proofImageMarkup(record)}
+        <div class="record-actions">
+          <button class="mini-button" data-action="edit" data-id="${record.id}" type="button">编辑</button>
+          <button class="mini-button reject" data-action="delete" data-id="${record.id}" type="button">删除</button>
+        </div>
       </div>
-      <div class="record-meta">
-        <span>${record.claimType}</span>
-        <span>${confirmText}</span>
+      <div class="record-edit is-hidden">
+        <div class="edit-form">
+          <label class="field">
+            <span>申报类型</span>
+            <select data-edit-field="claimType">${claimOptions}</select>
+          </label>
+          <label class="field">
+            <span>被推来的人</span>
+            <input data-edit-field="targetName" type="text" value="${escapeHtml(targetName)}" placeholder="输入对方cn" />
+          </label>
+          <label class="field wide">
+            <span>凭证/备注</span>
+            <input data-edit-field="proof" type="text" value="${escapeHtml(record.proof || "")}" placeholder="凭证说明" />
+          </label>
+          <div class="record-actions">
+            <button class="mini-button confirm" data-action="save-edit" data-id="${record.id}" type="button">保存</button>
+            <button class="mini-button" data-action="cancel-edit" data-id="${record.id}" type="button">取消</button>
+          </div>
+        </div>
       </div>
-      <p>${escapeHtml(record.proof || "没有填写凭证")}</p>
-      ${proofImageMarkup(record)}
     </article>
   `;
 }
@@ -165,7 +207,13 @@ function renderBoxControls() {
 function renderCloudControls() {
   const config = cloudConfig();
   if (!els.cloudGroupCode.value && config.groupCode) els.cloudGroupCode.value = config.groupCode;
-  els.cloudStatus.textContent = isCloudReady(config) && config.role === "member" ? `已连接：${config.groupCode}` : "未连接";
+  const unlocked = isCloudReady(config) && config.role === "member";
+  els.memberCloudPanel.classList.toggle("is-hidden", unlocked);
+  els.memberConnectedBar.classList.toggle("is-hidden", !unlocked);
+  if (unlocked && els.connectedGroupLabel) {
+    els.connectedGroupLabel.textContent = config.groupCode;
+  }
+  els.cloudStatus.textContent = unlocked ? "已连接" : "未连接";
 }
 
 async function connectMemberCloud() {
@@ -185,7 +233,7 @@ async function connectMemberCloud() {
     console.error(error);
     clearCloudConfig();
     renderCloudControls();
-    showToast("云端连接失败");
+    showToast(error.message || "连接失败");
   } finally {
     els.cloudConnectBtn.disabled = false;
   }
@@ -212,6 +260,19 @@ async function refreshCloudBeforeWrite() {
   const config = cloudConfig();
   if (!isCloudReady(config) || config.role !== "member") return;
   state = adoptCloudState(await loadCloudState(config.groupCode));
+}
+
+async function uploadImageToServer(dataUrl) {
+  const apiBaseUrl = customApiBaseUrl();
+  if (!apiBaseUrl) throw new Error("未连接云服务");
+  const result = await customCloudRpc(apiBaseUrl, "car_upload_image", {
+    filename: "screenshot.png",
+    data: dataUrl,
+  });
+  if (!result || typeof result.filename !== "string" || !result.filename) {
+    throw new Error("上传返回数据异常");
+  }
+  return result.filename;
 }
 
 async function submitRecord() {
@@ -247,6 +308,7 @@ async function submitRecord() {
     proof: els.proofInput.value.trim(),
     proofImageName: selectedProofImage?.name || "",
     proofImageData: selectedProofImage?.dataUrl || "",
+    proofImageUrl: selectedProofImage?.serverUrl || "",
     status: isInvalid ? "待审核" : "待确认",
     targetConfirmed: false,
   });
@@ -261,21 +323,85 @@ async function submitRecord() {
 document.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-action]");
   if (!button) return;
-  try {
-    await refreshCloudBeforeWrite();
-  } catch (error) {
-    console.error(error);
-    showToast("云端刷新失败，请稍后再试");
-    return;
+  const id = button.dataset.id;
+
+  // Actions that need cloud refresh first
+  if (["confirm-target", "reject-target", "save-edit", "delete"].includes(button.dataset.action)) {
+    try {
+      await refreshCloudBeforeWrite();
+    } catch (error) {
+      console.error(error);
+      showToast("云端刷新失败，请稍后再试");
+      return;
+    }
   }
+
   if (button.dataset.action === "confirm-target") {
-    state = updateRecord(button.dataset.id, { targetConfirmed: true, status: "待审核" });
+    const rec = state.records.find((r) => r.id === id);
+    if (rec) { rec.targetConfirmed = true; rec.status = "待审核"; }
     showToast("已确认，等待团长审核");
   }
   if (button.dataset.action === "reject-target") {
-    state = updateRecord(button.dataset.id, { targetConfirmed: false, status: "未通过" });
+    const rec = state.records.find((r) => r.id === id);
+    if (rec) { rec.targetConfirmed = false; rec.status = "未通过"; }
     showToast("已标记为未通过");
   }
+
+  // Delete
+  if (button.dataset.action === "delete") {
+    if (!window.confirm("确定删除这条推车记录吗？删除后不可恢复。")) return;
+    state.records = state.records.filter((r) => r.id !== id);
+    saveState(state);
+    render();
+    showToast("已删除记录");
+    return;
+  }
+
+  // Enter edit mode
+  if (button.dataset.action === "edit") {
+    const card = document.querySelector(`#record-${id}`);
+    if (card) {
+      card.querySelector(".record-view").classList.add("is-hidden");
+      card.querySelector(".record-edit").classList.remove("is-hidden");
+    }
+    return;
+  }
+
+  // Cancel edit
+  if (button.dataset.action === "cancel-edit") {
+    const card = document.querySelector(`#record-${id}`);
+    if (card) {
+      card.querySelector(".record-view").classList.remove("is-hidden");
+      card.querySelector(".record-edit").classList.add("is-hidden");
+    }
+    return;
+  }
+
+  // Save edit
+  if (button.dataset.action === "save-edit") {
+    const card = document.querySelector(`#record-${id}`);
+    if (!card) return;
+    const claimType = card.querySelector("[data-edit-field='claimType']").value;
+    const targetName = card.querySelector("[data-edit-field='targetName']").value.trim();
+    const proof = card.querySelector("[data-edit-field='proof']").value.trim();
+    const target = memberByName(state, targetName);
+    const patch = {
+      claimType,
+      proof,
+      targetName: targetName || undefined,
+      targetId: target ? target.id : "",
+    };
+    if (claimType === "无效推车") {
+      patch.targetName = "";
+      patch.targetId = "";
+      patch.targetConfirmed = false;
+    }
+    const rec = state.records.find((r) => r.id === id);
+    if (rec) Object.assign(rec, patch);
+    saveState(state);
+    showToast("已保存修改");
+  }
+
   render();
 });
 
@@ -285,10 +411,14 @@ els.meSelect.addEventListener("input", () => {
   render();
 });
 els.cloudConnectBtn.addEventListener("click", connectMemberCloud);
-els.cloudDisconnectBtn.addEventListener("click", () => {
+els.memberSwitchBtn.addEventListener("click", () => {
+  els.memberCloudPanel.classList.remove("is-hidden");
+  els.memberConnectedBar.classList.add("is-hidden");
+});
+els.memberExitBtn.addEventListener("click", () => {
   clearCloudConfig();
   renderCloudControls();
-  showToast("已断开云同步");
+  showToast("已退出，刷新后需重新配置");
 });
 els.boxSelect.addEventListener("change", () => {
   state = setActiveBox(els.boxSelect.value);
@@ -310,14 +440,27 @@ els.proofImage.addEventListener("change", () => {
     return;
   }
   const reader = new FileReader();
-  reader.addEventListener("load", () => {
+  reader.addEventListener("load", async () => {
+    const dataUrl = String(reader.result || "");
     selectedProofImage = {
       name: file.name,
-      dataUrl: String(reader.result || ""),
+      dataUrl: dataUrl,
+      serverUrl: null,
     };
-    els.proofImageName.textContent = `已选择：${file.name}`;
+    els.proofImageName.textContent = "正在上传截图...";
+    try {
+      const filename = await uploadImageToServer(dataUrl);
+      selectedProofImage.serverUrl = "/car-uploads/" + filename;
+      els.proofImageName.textContent = `已选择：${file.name}`;
+    } catch (error) {
+      console.warn("截图上传服务器失败，使用本地存储", error);
+      els.proofImageName.textContent = `已选择：${file.name}（仅本地）`;
+    }
   });
-  reader.addEventListener("error", () => showToast("截图读取失败，请重新上传"));
+  reader.addEventListener("error", () => {
+    selectedProofImage = null;
+    showToast("截图读取失败，请重新上传");
+  });
   reader.readAsDataURL(file);
 });
 els.addRecordBtn.addEventListener("click", submitRecord);
@@ -328,4 +471,5 @@ window.addEventListener("storage", () => {
 });
 
 render();
+setupAutoRefresh(() => render(), 60);
 loadCloudOnStart();

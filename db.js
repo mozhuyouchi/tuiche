@@ -1,7 +1,7 @@
 const CAR_DB_KEY = "car-push-tool-v2";
 const CAR_CLOUD_KEY = "car-cloud-config-v1";
 const CAR_ACTIVE_BOX_KEY = "car-active-box-id-v1";
-const CUSTOM_API_BASE_URL = "";
+const CUSTOM_API_BASE_URL = "/car-api";
 const SUPABASE_URL = "https://uvfecqqfrxsfmdtvxydz.supabase.co";
 const SUPABASE_PUBLIC_KEY = "sb_publishable_Qo39DhmeDPub_TMs3WtGHw_eXlLfTMT";
 
@@ -137,9 +137,15 @@ function loadState() {
 }
 
 function saveState(state) {
+  // Sync flat records back into the active box so normalizeState doesn't overwrite them
+  if (state.boxes && state.records) {
+    const activeBox = state.boxes.find((b) => b.id === state.activeBoxId);
+    if (activeBox) activeBox.records = state.records;
+  }
   const storageState = stateForStorage(state);
   localStorage.setItem(CAR_DB_KEY, JSON.stringify(storageState));
   localStorage.setItem(CAR_ACTIVE_BOX_KEY, storageState.activeBoxId);
+  window._carLastModified = Date.now();
   queueCloudSave(storageState);
 }
 
@@ -417,6 +423,14 @@ function updateRecord(id, patch) {
   return state;
 }
 
+function deleteRecord(id) {
+  const state = loadState();
+  state.records = state.records.filter((record) => record.id !== id);
+  state.allocationAssignments = {};
+  saveState(state);
+  return state;
+}
+
 function resetDemo() {
   const state = defaultState();
   saveState(state);
@@ -571,13 +585,62 @@ function statusText(status) {
 }
 
 function proofImageMarkup(record) {
-  if (!record.proofImageData) return "";
+  const imageUrl = record.proofImageUrl || record.proofImageData;
+  if (!imageUrl) return "";
   return `
-    <a class="proof-thumb" href="${record.proofImageData}" target="_blank" rel="noreferrer">
-      <img src="${record.proofImageData}" alt="${escapeHtml(record.proofImageName || "推车截图")}" />
+    <a class="proof-thumb" href="javascript:void(0)" onclick="openLightbox('${escapeHtml(imageUrl)}')" title="点击查看大图">
+      <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(record.proofImageName || "推车截图")}" />
       <span>${escapeHtml(record.proofImageName || "查看截图")}</span>
     </a>
   `;
+}
+
+function openLightbox(url) {
+  let lb = document.querySelector("#lightbox");
+  if (!lb) {
+    lb = document.createElement("div");
+    lb.id = "lightbox";
+    lb.className = "lightbox";
+    lb.innerHTML = '<div class="lightbox-bg"></div><img class="lightbox-img" src="" alt="" /><button class="lightbox-close">&times;</button>';
+    document.body.appendChild(lb);
+    lb.querySelector(".lightbox-bg").addEventListener("click", closeLightbox);
+    lb.querySelector(".lightbox-close").addEventListener("click", closeLightbox);
+  }
+  lb.querySelector(".lightbox-img").src = url;
+  lb.classList.add("show");
+}
+
+function closeLightbox() {
+  const lb = document.querySelector("#lightbox");
+  if (lb) lb.classList.remove("show");
+}
+
+function formatTime(timestamp) {
+  if (!timestamp) return "";
+  const diff = Date.now() - timestamp;
+  const seconds = Math.floor(diff / 1000);
+  if (seconds < 60) return "刚刚";
+  if (seconds < 3600) return `${Math.floor(seconds / 60)} 分钟前`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)} 小时前`;
+  return `${Math.floor(seconds / 86400)} 天前`;
+}
+
+function setupAutoRefresh(renderFn, intervalSeconds = 60) {
+  if (window._carAutoRefreshTimer) clearInterval(window._carAutoRefreshTimer);
+  window._carAutoRefreshTimer = setInterval(async () => {
+    const config = cloudConfig();
+    if (!isCloudReady(config)) return;
+    // Skip if local changes were made in the last 3 seconds to avoid overwriting
+    if (window._carLastModified && Date.now() - window._carLastModified < 3000) return;
+    try {
+      const remote = await loadCloudState(config.groupCode);
+      if (window._carStatePauseRefresh) return;
+      adoptCloudState(remote);
+      if (typeof renderFn === "function") renderFn();
+    } catch (e) {
+      // silent refresh
+    }
+  }, intervalSeconds * 1000);
 }
 
 function showToast(message) {

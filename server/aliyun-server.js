@@ -5,7 +5,8 @@ const crypto = require("crypto");
 
 const PORT = Number(process.env.PORT || 3000);
 const DATA_FILE = process.env.CAR_DATA_FILE || path.join(__dirname, "car-states.json");
-const MAX_BODY_BYTES = 20 * 1024 * 1024;
+const MAX_BODY_BYTES = 50 * 1024 * 1024;
+const UPLOAD_DIR = process.env.CAR_UPLOAD_DIR || "/srv/car-api/uploads";
 
 async function readStore() {
   try {
@@ -50,6 +51,30 @@ function assertAdmin(group, adminPin) {
 
 async function handleRpc(name, body) {
   const store = await readStore();
+
+  if (name === "car_upload_image") {
+    const raw = String(body.data || "");
+    const match = raw.match(/^data:image\/(png|jpe?g|gif|webp);base64,(.+)$/);
+    if (!match) {
+      const error = new Error("不支持的图片格式，仅接受 PNG/JPEG/GIF/WebP");
+      error.status = 400;
+      throw error;
+    }
+    const ext = match[1].replace("jpeg", "jpg");
+    const base64Data = match[2];
+    const buffer = Buffer.from(base64Data, "base64");
+    if (buffer.length > 10 * 1024 * 1024) {
+      const error = new Error("图片文件超过 10MB 限制");
+      error.status = 413;
+      throw error;
+    }
+    const uniqueName = `${crypto.randomUUID()}.${ext}`;
+    const filePath = path.join(UPLOAD_DIR, uniqueName);
+    await fs.mkdir(UPLOAD_DIR, { recursive: true });
+    await fs.writeFile(filePath, buffer);
+    return { filename: uniqueName };
+  }
+
   const groupCode = cleanGroupCode(body.p_group_code);
   if (!groupCode) {
     const error = new Error("缺少团号");
